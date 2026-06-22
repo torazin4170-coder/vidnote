@@ -120,7 +120,41 @@ npm run db:migrate-local
 
 - Git リポジトリ（GitHub / GitLab 等）にプッシュ済みであること
 - Turso クラウド DB が作成済みで `npm run db:init` 済みであること
-- Vercel 上では **yt-dlp は使えません**。字幕取得は `youtube-transcript` 経路のみです
+- Vercel 上では **yt-dlp は使えません**
+- **YouTube は Vercel の IP から字幕取得をブロック**します。Vercel 公開時は **字幕リレー（自宅 PC）** の設定が必要です（下記）
+
+### 字幕リレー（Vercel 公開時に必須）
+
+YouTube はクラウド（Vercel）からの字幕リクエストを拒否します。自宅 PC でリレーを動かし、Vercel からそこ経由で字幕を取得します。
+
+**1. 自宅 PC でリレーを起動**
+
+```powershell
+cd video-summary-app
+$env:TRANSCRIPT_RELAY_SECRET="任意の長い文字列"
+npm run relay
+```
+
+**2. インターネットからリレー URL を公開**
+
+[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) や ngrok 等で `http://127.0.0.1:8787` を公開し、HTTPS URL を取得します。
+
+例（cloudflared）:
+
+```powershell
+cloudflared tunnel --url http://127.0.0.1:8787
+```
+
+**3. Vercel の Environment Variables に追加**
+
+| 変数 | 例 |
+|------|-----|
+| `TRANSCRIPT_RELAY_URL` | `https://xxxx.trycloudflare.com` |
+| `TRANSCRIPT_RELAY_SECRET` | 手順 1 と同じ文字列 |
+
+**4. Vercel を再デプロイ**
+
+> ローカル版（`npm run dev`）ではリレー不要です。自宅回線から直接 YouTube にアクセスできます。
 
 ### 手順
 
@@ -133,6 +167,8 @@ npm run db:migrate-local
 | `TURSO_AUTH_TOKEN` | はい | Turso ダッシュボードの Auth Token |
 | `GEMINI_API_KEY` | はい | Google AI Studio の API キー |
 | `SITE_PASSWORD` | 推奨 | 公開 URL の簡易パスワード保護 |
+| `TRANSCRIPT_RELAY_URL` | Vercel 公開時 | 自宅 PC の字幕リレー URL |
+| `TRANSCRIPT_RELAY_SECRET` | 推奨 | リレー認証用共有秘密 |
 | `GEMINI_MODEL` | 任意 | 既定: `gemini-2.5-flash` |
 
 3. **Deploy** を実行

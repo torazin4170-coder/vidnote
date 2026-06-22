@@ -168,7 +168,7 @@ async function fetchYtdlpJson(url: string): Promise<YtdlpJson> {
   return JSON.parse(stdout) as YtdlpJson;
 }
 
-async function fetchMetadataViaOembed(
+export async function fetchMetadataViaOembed(
   url: string,
   videoId: string,
 ): Promise<VideoMetadata> {

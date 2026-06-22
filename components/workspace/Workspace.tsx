@@ -4,13 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { FocusMode, Session } from "@/lib/schema";
 import { isProcessingStatus } from "@/lib/labels";
-import { fetchVideoMetadataInBrowser } from "@/lib/youtube/metadata-client";
 import {
-  extractYoutubeId,
   normalizeYoutubeUrl,
   youtubeWatchUrl,
 } from "@/lib/youtube/parse-url";
-import { fetchCaptionsInBrowser } from "@/lib/youtube/transcript-client";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { GlobalHeader } from "@/components/workspace/GlobalHeader";
 import { PaneResizer } from "@/components/workspace/PaneResizer";
@@ -44,16 +41,25 @@ function mergeSessionSummary(existing: Session, summary: Session): Session {
 
 async function fetchCaptionsPayload(urlInput: string) {
   const youtubeUrl = normalizeYoutubeUrl(urlInput);
-  const youtubeId = extractYoutubeId(youtubeUrl)!;
-  const [{ transcript }, metadata] = await Promise.all([
-    fetchCaptionsInBrowser(youtubeId),
-    fetchVideoMetadataInBrowser(youtubeUrl, youtubeId),
-  ]);
+  const res = await fetch("/api/youtube/transcript", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ youtubeUrl }),
+  });
+  const data = (await res.json()) as {
+    error?: string;
+    transcript?: string;
+    title?: string | null;
+    thumbnailUrl?: string | null;
+  };
+  if (!res.ok || !data.transcript?.trim()) {
+    throw new Error(data.error ?? "字幕の取得に失敗しました");
+  }
   return {
     youtubeUrl,
-    transcript,
-    title: metadata.title,
-    thumbnailUrl: metadata.thumbnailUrl,
+    transcript: data.transcript,
+    title: data.title ?? null,
+    thumbnailUrl: data.thumbnailUrl ?? null,
   };
 }
 

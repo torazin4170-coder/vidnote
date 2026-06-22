@@ -4,7 +4,7 @@ import { getSession } from "@/lib/db/sessions";
 import {
   drainJobQueue,
   reprocessSession,
-  resummarizeSession,
+  summarizeSession,
 } from "@/lib/jobs/processor";
 
 export const maxDuration = 60;
@@ -22,8 +22,8 @@ export async function POST(request: Request, context: RouteContext) {
   const action = url.searchParams.get("action") ?? "process";
 
   try {
-    if (action === "resummarize") {
-      await resummarizeSession(id);
+    if (action === "resummarize" || action === "summarize") {
+      await summarizeSession(id);
     } else {
       await reprocessSession(id);
       await drainJobQueue();

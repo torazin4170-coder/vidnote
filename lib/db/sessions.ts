@@ -54,14 +54,16 @@ export async function insertSession(input: {
   title?: string | null;
   thumbnailUrl?: string | null;
   durationSec?: number | null;
+  transcript?: string | null;
 }): Promise<Session> {
   const now = new Date().toISOString();
+  const hasTranscript = Boolean(input.transcript?.trim());
   const db = await getDb();
   await db.execute({
     sql: `INSERT INTO sessions (
       id, youtube_url, youtube_id, title, thumbnail_url, duration_sec,
-      status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+      status, transcript, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       input.id,
       input.youtubeUrl,
@@ -69,6 +71,8 @@ export async function insertSession(input: {
       input.title ?? null,
       input.thumbnailUrl ?? null,
       input.durationSec ?? null,
+      hasTranscript ? "transcribed" : "pending",
+      hasTranscript ? input.transcript!.trim() : null,
       now,
       now,
     ],

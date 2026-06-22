@@ -16,24 +16,29 @@ async function processSession(sessionId: string): Promise<void> {
   if (!session) return;
 
   try {
-    await updateSession(sessionId, {
-      status: "fetching_captions",
-      errorMessage: null,
-    });
+    let transcript = session.transcript?.trim() ?? "";
 
-    const url = session.youtubeId
-      ? youtubeWatchUrl(session.youtubeId)
-      : session.youtubeUrl;
+    if (!transcript) {
+      await updateSession(sessionId, {
+        status: "fetching_captions",
+        errorMessage: null,
+      });
 
-    const captions = await fetchCaptions(url);
+      const url = session.youtubeId
+        ? youtubeWatchUrl(session.youtubeId)
+        : session.youtubeUrl;
 
-    await updateSession(sessionId, {
-      title: captions.metadata.title,
-      thumbnailUrl: captions.metadata.thumbnailUrl,
-      durationSec: captions.metadata.durationSec,
-      transcript: captions.transcript,
-      status: "transcribed",
-    });
+      const captions = await fetchCaptions(url);
+      transcript = captions.transcript;
+
+      await updateSession(sessionId, {
+        title: captions.metadata.title,
+        thumbnailUrl: captions.metadata.thumbnailUrl,
+        durationSec: captions.metadata.durationSec,
+        transcript,
+        status: "transcribed",
+      });
+    }
 
     if (!isGeminiConfigured()) {
       await updateSession(sessionId, {
@@ -43,9 +48,9 @@ async function processSession(sessionId: string): Promise<void> {
       return;
     }
 
-    await updateSession(sessionId, { status: "summarizing" });
+    await updateSession(sessionId, { status: "summarizing", errorMessage: null });
 
-    const summary = await summarizeTranscript(captions.transcript);
+    const summary = await summarizeTranscript(transcript);
 
     await updateSession(sessionId, {
       summaryJson: JSON.stringify(summary),
@@ -58,6 +63,38 @@ async function processSession(sessionId: string): Promise<void> {
       status: "error",
       errorMessage: message,
     });
+  }
+}
+
+export async function summarizeSession(sessionId: string): Promise<void> {
+  const session = await getSession(sessionId);
+  if (!session?.transcript?.trim()) {
+    throw new Error("文字起こしがありません");
+  }
+  if (!isGeminiConfigured()) {
+    await updateSession(sessionId, {
+      status: "done",
+      errorMessage: null,
+    });
+    return;
+  }
+
+  await updateSession(sessionId, { status: "summarizing", errorMessage: null });
+
+  try {
+    const summary = await summarizeTranscript(session.transcript);
+    await updateSession(sessionId, {
+      summaryJson: JSON.stringify(summary),
+      status: "done",
+      errorMessage: null,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "要約に失敗しました";
+    await updateSession(sessionId, {
+      status: "error",
+      errorMessage: message,
+    });
+    throw err;
   }
 }
 
@@ -108,29 +145,5 @@ export async function reprocessSession(sessionId: string): Promise<void> {
 }
 
 export async function resummarizeSession(sessionId: string): Promise<void> {
-  const session = await getSession(sessionId);
-  if (!session?.transcript) {
-    throw new Error("文字起こしがありません");
-  }
-  if (!isGeminiConfigured()) {
-    throw new Error("GEMINI_API_KEY が未設定です");
-  }
-
-  await updateSession(sessionId, { status: "summarizing", errorMessage: null });
-
-  try {
-    const summary = await summarizeTranscript(session.transcript);
-    await updateSession(sessionId, {
-      summaryJson: JSON.stringify(summary),
-      status: "done",
-      errorMessage: null,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "要約に失敗しました";
-    await updateSession(sessionId, {
-      status: "error",
-      errorMessage: message,
-    });
-    throw err;
-  }
+  await summarizeSession(sessionId);
 }

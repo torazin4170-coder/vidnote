@@ -4,6 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { FocusMode, Session } from "@/lib/schema";
 import { isProcessingStatus } from "@/lib/labels";
+import { fetchVideoMetadataInBrowser } from "@/lib/youtube/metadata-client";
+import {
+  extractYoutubeId,
+  normalizeYoutubeUrl,
+  youtubeWatchUrl,
+} from "@/lib/youtube/parse-url";
+import { fetchCaptionsInBrowser } from "@/lib/youtube/transcript-client";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { GlobalHeader } from "@/components/workspace/GlobalHeader";
 import { PaneResizer } from "@/components/workspace/PaneResizer";
@@ -32,6 +39,21 @@ function mergeSessionSummary(existing: Session, summary: Session): Session {
     ...summary,
     transcript: existing.transcript,
     summaryJson: existing.summaryJson,
+  };
+}
+
+async function fetchCaptionsPayload(urlInput: string) {
+  const youtubeUrl = normalizeYoutubeUrl(urlInput);
+  const youtubeId = extractYoutubeId(youtubeUrl)!;
+  const [{ transcript }, metadata] = await Promise.all([
+    fetchCaptionsInBrowser(youtubeId),
+    fetchVideoMetadataInBrowser(youtubeUrl, youtubeId),
+  ]);
+  return {
+    youtubeUrl,
+    transcript,
+    title: metadata.title,
+    thumbnailUrl: metadata.thumbnailUrl,
   };
 }
 
@@ -150,10 +172,11 @@ export function Workspace({
     if (!draftUrl.trim()) return;
     setIsCreating(true);
     try {
+      const payload = await fetchCaptionsPayload(draftUrl.trim());
       const res = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ youtubeUrl: draftUrl.trim() }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "作成に失敗しました");
@@ -163,7 +186,12 @@ export function Workspace({
       setSelectedSessionId(session.id);
       setIsNewDraft(false);
       setDraftUrl("");
-      void fetch(`/api/sessions/${session.id}/process`, { method: "POST" });
+
+      await fetch(`/api/sessions/${session.id}/process?action=summarize`, {
+        method: "POST",
+      });
+      void refreshSessions();
+      void refreshSession(session.id);
     } catch (err) {
       alert(err instanceof Error ? err.message : "作成に失敗しました");
     } finally {
@@ -208,17 +236,35 @@ export function Workspace({
   };
 
   const handleReprocess = async () => {
-    if (!selectedSessionId) return;
-    setSessionDetails((prev) => {
-      const next = { ...prev };
-      delete next[selectedSessionId];
-      return next;
-    });
-    await fetch(`/api/sessions/${selectedSessionId}/process`, {
-      method: "POST",
-    });
-    void refreshSessions();
-    void refreshSession(selectedSessionId);
+    if (!selectedSessionId || !selectedSession) return;
+    setIsCreating(true);
+    try {
+      const url = selectedSession.youtubeId
+        ? youtubeWatchUrl(selectedSession.youtubeId)
+        : selectedSession.youtubeUrl;
+      const payload = await fetchCaptionsPayload(url);
+
+      await fetch(`/api/sessions/${selectedSessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript: payload.transcript,
+          title: payload.title,
+          thumbnailUrl: payload.thumbnailUrl,
+          resetForReprocess: true,
+        }),
+      });
+      await fetch(
+        `/api/sessions/${selectedSessionId}/process?action=summarize`,
+        { method: "POST" },
+      );
+      void refreshSessions();
+      void refreshSession(selectedSessionId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "字幕の再取得に失敗しました");
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleResummarize = async () => {
@@ -272,9 +318,9 @@ export function Workspace({
   const showPane3 = focusMode === "all" || focusMode === "transcript";
   const showPane4 = focusMode === "all" || focusMode === "notes";
 
-  const processing = selectedSession
-    ? isProcessingStatus(selectedSession.status)
-    : isCreating;
+  const processing =
+    isCreating ||
+    (selectedSession ? isProcessingStatus(selectedSession.status) : false);
   const isLoadingDetail =
     selectedSessionId != null &&
     !isNewDraft &&

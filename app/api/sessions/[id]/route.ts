@@ -9,6 +9,10 @@ import {
 
 const patchSchema = z.object({
   notesHtml: z.string().optional(),
+  transcript: z.string().min(1).optional(),
+  title: z.string().nullable().optional(),
+  thumbnailUrl: z.string().nullable().optional(),
+  resetForReprocess: z.boolean().optional(),
 });
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -33,6 +37,19 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = patchSchema.parse(await request.json());
     const session = await updateSession(id, {
       notesHtml: body.notesHtml ?? existing.notesHtml,
+      transcript: body.transcript ?? existing.transcript,
+      title: body.title !== undefined ? body.title : existing.title,
+      thumbnailUrl:
+        body.thumbnailUrl !== undefined
+          ? body.thumbnailUrl
+          : existing.thumbnailUrl,
+      ...(body.transcript || body.resetForReprocess
+        ? {
+            status: "transcribed",
+            summaryJson: null,
+            errorMessage: null,
+          }
+        : {}),
     });
     return NextResponse.json({ session });
   } catch (err) {

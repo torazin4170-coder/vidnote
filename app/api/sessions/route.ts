@@ -13,6 +13,9 @@ export const maxDuration = 60;
 
 const createSchema = z.object({
   youtubeUrl: z.string().min(1),
+  transcript: z.string().min(1).optional(),
+  title: z.string().nullable().optional(),
+  thumbnailUrl: z.string().nullable().optional(),
 });
 
 export async function GET() {
@@ -32,7 +35,14 @@ export async function POST(request: Request) {
     const youtubeId = extractYoutubeId(youtubeUrl)!;
 
     const id = randomUUID();
-    const session = await insertSession({ id, youtubeUrl, youtubeId });
+    const session = await insertSession({
+      id,
+      youtubeUrl,
+      youtubeId,
+      transcript: body.transcript,
+      title: body.title,
+      thumbnailUrl: body.thumbnailUrl,
+    });
 
     return NextResponse.json({ session }, { status: 201 });
   } catch (err) {

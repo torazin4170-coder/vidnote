@@ -1,6 +1,11 @@
 import { YoutubeTranscript } from "youtube-transcript";
 
-import { fetchCaptions, fetchMetadataViaOembed, type VideoMetadata } from "@/lib/youtube/captions";
+import { isVercel } from "@/lib/env";
+import {
+  fetchCaptions,
+  fetchMetadataViaOembed,
+  type VideoMetadata,
+} from "@/lib/youtube/captions";
 import { youtubeWatchUrl } from "@/lib/youtube/parse-url";
 import {
   segmentsToTranscript,
@@ -164,6 +169,12 @@ export async function fetchTranscriptServer(
         relayErr instanceof Error ? relayErr.message : String(relayErr);
       throw new Error(`リレー字幕取得エラー: ${message}`);
     }
+  }
+
+  if (isVercel()) {
+    throw new Error(
+      "Vercel では TRANSCRIPT_RELAY_URL（自宅 PC リレー）の設定が必要です。README の「字幕リレー」を参照してください。",
+    );
   }
 
   try {

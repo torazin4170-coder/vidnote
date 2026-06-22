@@ -6,8 +6,8 @@ import {
   updateSession,
 } from "@/lib/db/sessions";
 import { summarizeTranscript, isGeminiConfigured } from "@/lib/ai/gemini";
-import { fetchCaptions } from "@/lib/youtube/captions";
-import { youtubeWatchUrl } from "@/lib/youtube/parse-url";
+import { fetchTranscriptServer } from "@/lib/youtube/transcript-server";
+import { extractYoutubeId, youtubeWatchUrl } from "@/lib/youtube/parse-url";
 
 let queueRunning = false;
 
@@ -28,13 +28,14 @@ async function processSession(sessionId: string): Promise<void> {
         ? youtubeWatchUrl(session.youtubeId)
         : session.youtubeUrl;
 
-      const captions = await fetchCaptions(url);
+      const videoId = session.youtubeId ?? extractYoutubeId(url)!;
+      const captions = await fetchTranscriptServer(videoId, url);
       transcript = captions.transcript;
 
       await updateSession(sessionId, {
-        title: captions.metadata.title,
-        thumbnailUrl: captions.metadata.thumbnailUrl,
-        durationSec: captions.metadata.durationSec,
+        title: captions.title,
+        thumbnailUrl: captions.thumbnailUrl,
+        durationSec: captions.durationSec,
         transcript,
         status: "transcribed",
       });

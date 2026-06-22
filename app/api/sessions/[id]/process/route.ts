@@ -11,6 +11,16 @@ export const maxDuration = 60;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+function errorResponse(session: NonNullable<Awaited<ReturnType<typeof getSession>>>) {
+  return NextResponse.json(
+    {
+      error: session.errorMessage ?? "処理に失敗しました",
+      session,
+    },
+    { status: 400 },
+  );
+}
+
 export async function POST(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const session = await getSession(id);
@@ -30,10 +40,20 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const updated = await getSession(id);
+    if (!updated) {
+      return NextResponse.json({ error: "セッションが見つかりません" }, { status: 404 });
+    }
+    if (updated.status === "error") {
+      return errorResponse(updated);
+    }
     return NextResponse.json({ session: updated });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "処理の開始に失敗しました";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const updated = await getSession(id);
+    return NextResponse.json(
+      { error: message, session: updated ?? undefined },
+      { status: 400 },
+    );
   }
 }

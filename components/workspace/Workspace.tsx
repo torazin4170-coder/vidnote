@@ -4,10 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { FocusMode, Session } from "@/lib/schema";
 import { isProcessingStatus } from "@/lib/labels";
-import {
-  normalizeYoutubeUrl,
-  youtubeWatchUrl,
-} from "@/lib/youtube/parse-url";
+import { normalizeYoutubeUrl, youtubeWatchUrl } from "@/lib/youtube/parse-url";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { GlobalHeader } from "@/components/workspace/GlobalHeader";
 import { PaneResizer } from "@/components/workspace/PaneResizer";
@@ -39,28 +36,34 @@ function mergeSessionSummary(existing: Session, summary: Session): Session {
   };
 }
 
-async function fetchCaptionsPayload(urlInput: string) {
-  const youtubeUrl = normalizeYoutubeUrl(urlInput);
-  const res = await fetch("/api/youtube/transcript", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ youtubeUrl }),
-  });
-  const data = (await res.json()) as {
-    error?: string;
-    transcript?: string;
-    title?: string | null;
-    thumbnailUrl?: string | null;
-  };
-  if (!res.ok || !data.transcript?.trim()) {
-    throw new Error(data.error ?? "字幕の取得に失敗しました");
+async function apiFetch(
+  input: string,
+  init?: RequestInit,
+): Promise<{ res: Response; data: Record<string, unknown> }> {
+  let res: Response;
+  try {
+    res = await fetch(input, {
+      credentials: "include",
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch {
+    throw new Error(
+      "サーバーとの通信に失敗しました。ページを再読み込み（Ctrl+Shift+R）してから再試行してください。",
+    );
   }
-  return {
-    youtubeUrl,
-    transcript: data.transcript,
-    title: data.title ?? null,
-    thumbnailUrl: data.thumbnailUrl ?? null,
-  };
+
+  let data: Record<string, unknown> = {};
+  try {
+    data = (await res.json()) as Record<string, unknown>;
+  } catch {
+    throw new Error(`サーバー応答の解析に失敗しました（HTTP ${res.status}）`);
+  }
+
+  return { res, data };
 }
 
 export function Workspace({
@@ -93,7 +96,7 @@ export function Workspace({
   const loadSessionDetail = useCallback(async (id: string, silent = false) => {
     if (!silent) setLoadingSessionId(id);
     try {
-      const res = await fetch(`/api/sessions/${id}`);
+      const res = await fetch(`/api/sessions/${id}`, { credentials: "include" });
       if (!res.ok) return;
       const data = (await res.json()) as { session: Session };
       setSessionDetails((prev) => ({ ...prev, [id]: data.session }));
@@ -115,7 +118,7 @@ export function Workspace({
   }, [selectedSessionId, isNewDraft, loadSessionDetail]);
 
   const refreshSessions = useCallback(async () => {
-    const res = await fetch("/api/sessions");
+    const res = await fetch("/api/sessions", { credentials: "include" });
     if (!res.ok) return;
     const data = (await res.json()) as { sessions: Session[] };
     setSessions((prev) =>
@@ -137,7 +140,7 @@ export function Workspace({
   }, []);
 
   const refreshSession = useCallback(async (id: string) => {
-    const res = await fetch(`/api/sessions/${id}`);
+    const res = await fetch(`/api/sessions/${id}`, { credentials: "include" });
     if (!res.ok) return;
     const data = (await res.json()) as { session: Session };
     setSessionDetails((prev) => ({ ...prev, [id]: data.session }));
@@ -178,14 +181,14 @@ export function Workspace({
     if (!draftUrl.trim()) return;
     setIsCreating(true);
     try {
-      const payload = await fetchCaptionsPayload(draftUrl.trim());
-      const res = await fetch("/api/sessions", {
+      normalizeYoutubeUrl(draftUrl.trim());
+      const { res, data } = await apiFetch("/api/sessions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ youtubeUrl: draftUrl.trim() }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "作成に失敗しました");
+      if (!res.ok) {
+        throw new Error(String(data.error ?? "作成に失敗しました"));
+      }
 
       const session = data.session as Session;
       setSessions((prev) => [session, ...prev]);
@@ -193,9 +196,14 @@ export function Workspace({
       setIsNewDraft(false);
       setDraftUrl("");
 
-      await fetch(`/api/sessions/${session.id}/process?action=summarize`, {
-        method: "POST",
-      });
+      const { res: processRes, data: processData } = await apiFetch(
+        `/api/sessions/${session.id}/process`,
+        { method: "POST" },
+      );
+      if (!processRes.ok) {
+        throw new Error(String(processData.error ?? "処理に失敗しました"));
+      }
+
       void refreshSessions();
       void refreshSession(session.id);
     } catch (err) {
@@ -206,7 +214,10 @@ export function Workspace({
   };
 
   const handleDeleteSession = async (id: string) => {
-    const res = await fetch(`/api/sessions/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/sessions/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       alert(data.error ?? "削除に失敗しました");
@@ -229,7 +240,10 @@ export function Workspace({
   };
 
   const handleDeleteAllSessions = async () => {
-    const res = await fetch("/api/sessions", { method: "DELETE" });
+    const res = await fetch("/api/sessions", {
+      method: "DELETE",
+      credentials: "include",
+    });
     if (!res.ok) {
       alert("履歴の削除に失敗しました");
       return;
@@ -245,25 +259,13 @@ export function Workspace({
     if (!selectedSessionId || !selectedSession) return;
     setIsCreating(true);
     try {
-      const url = selectedSession.youtubeId
-        ? youtubeWatchUrl(selectedSession.youtubeId)
-        : selectedSession.youtubeUrl;
-      const payload = await fetchCaptionsPayload(url);
-
-      await fetch(`/api/sessions/${selectedSessionId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript: payload.transcript,
-          title: payload.title,
-          thumbnailUrl: payload.thumbnailUrl,
-          resetForReprocess: true,
-        }),
-      });
-      await fetch(
-        `/api/sessions/${selectedSessionId}/process?action=summarize`,
+      const { res, data } = await apiFetch(
+        `/api/sessions/${selectedSessionId}/process`,
         { method: "POST" },
       );
+      if (!res.ok) {
+        throw new Error(String(data.error ?? "字幕の再取得に失敗しました"));
+      }
       void refreshSessions();
       void refreshSession(selectedSessionId);
     } catch (err) {
@@ -275,11 +277,18 @@ export function Workspace({
 
   const handleResummarize = async () => {
     if (!selectedSessionId) return;
-    await fetch(
-      `/api/sessions/${selectedSessionId}/process?action=resummarize`,
-      { method: "POST" },
-    );
-    void refreshSession(selectedSessionId);
+    try {
+      const { res, data } = await apiFetch(
+        `/api/sessions/${selectedSessionId}/process?action=resummarize`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        throw new Error(String(data.error ?? "要約の再生成に失敗しました"));
+      }
+      void refreshSession(selectedSessionId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "要約の再生成に失敗しました");
+    }
   };
 
   const handleNotesChange = async (html: string) => {
@@ -287,6 +296,7 @@ export function Workspace({
     if (html === (selectedSession?.notesHtml ?? "")) return;
     const res = await fetch(`/api/sessions/${selectedSessionId}`, {
       method: "PATCH",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notesHtml: html }),
     });

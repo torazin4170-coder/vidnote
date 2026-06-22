@@ -1,4 +1,3 @@
-import { after } from "next/server";
 import { NextResponse } from "next/server";
 
 import { getSession } from "@/lib/db/sessions";
@@ -24,15 +23,10 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     if (action === "resummarize") {
-      after(async () => {
-        await resummarizeSession(id);
-        await drainJobQueue();
-      });
+      await resummarizeSession(id);
     } else {
-      after(async () => {
-        await reprocessSession(id);
-        await drainJobQueue();
-      });
+      await reprocessSession(id);
+      await drainJobQueue();
     }
 
     const updated = await getSession(id);

@@ -163,6 +163,7 @@ export function Workspace({
       setSelectedSessionId(session.id);
       setIsNewDraft(false);
       setDraftUrl("");
+      void fetch(`/api/sessions/${session.id}/process`, { method: "POST" });
     } catch (err) {
       alert(err instanceof Error ? err.message : "作成に失敗しました");
     } finally {

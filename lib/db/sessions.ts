@@ -142,6 +142,21 @@ export async function deleteAllSessions(): Promise<number> {
   return result.rowsAffected;
 }
 
+export async function recoverStaleProcessingSessions(): Promise<number> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  const result = await db.execute({
+    sql: `
+      UPDATE sessions
+      SET status = 'pending', error_message = NULL, updated_at = ?
+      WHERE status IN ('fetching_captions', 'summarizing')
+        AND datetime(updated_at) < datetime('now', '-5 minutes')
+    `,
+    args: [now],
+  });
+  return result.rowsAffected;
+}
+
 export async function getProcessingSessionId(): Promise<string | null> {
   const db = await getDb();
   const result = await db.execute(

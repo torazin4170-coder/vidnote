@@ -1,11 +1,9 @@
 import { randomUUID } from "node:crypto";
 
-import { after } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { listSessionSummaries, insertSession, deleteAllSessions } from "@/lib/db/sessions";
-import { drainJobQueue, enqueueSessionProcessing } from "@/lib/jobs/processor";
 import {
   extractYoutubeId,
   normalizeYoutubeUrl,
@@ -35,11 +33,6 @@ export async function POST(request: Request) {
 
     const id = randomUUID();
     const session = await insertSession({ id, youtubeUrl, youtubeId });
-
-    after(async () => {
-      await enqueueSessionProcessing(session.id);
-      await drainJobQueue();
-    });
 
     return NextResponse.json({ session }, { status: 201 });
   } catch (err) {

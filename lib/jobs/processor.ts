@@ -2,6 +2,7 @@ import {
   getPendingSessionIds,
   getProcessingSessionId,
   getSession,
+  recoverStaleProcessingSessions,
   updateSession,
 } from "@/lib/db/sessions";
 import { summarizeTranscript, isGeminiConfigured } from "@/lib/ai/gemini";
@@ -65,6 +66,8 @@ export async function drainJobQueue(): Promise<void> {
   queueRunning = true;
 
   try {
+    await recoverStaleProcessingSessions();
+
     while (true) {
       const active = await getProcessingSessionId();
       if (active) break;
@@ -93,8 +96,6 @@ export async function enqueueSessionProcessing(
     status: "pending",
     errorMessage: null,
   });
-
-  void drainJobQueue();
 }
 
 export async function reprocessSession(sessionId: string): Promise<void> {
@@ -104,7 +105,6 @@ export async function reprocessSession(sessionId: string): Promise<void> {
     summaryJson: null,
     errorMessage: null,
   });
-  void drainJobQueue();
 }
 
 export async function resummarizeSession(sessionId: string): Promise<void> {
@@ -132,7 +132,5 @@ export async function resummarizeSession(sessionId: string): Promise<void> {
       errorMessage: message,
     });
     throw err;
-  } finally {
-    void drainJobQueue();
   }
 }

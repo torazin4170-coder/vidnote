@@ -48,7 +48,8 @@ async function fetchViaRelay(videoId: string): Promise<TranscriptServerResult> {
   }
 
   const secret = process.env.TRANSCRIPT_RELAY_SECRET?.trim();
-  const res = await fetch(`${relayUrl.replace(/\/$/, "")}/transcript`, {
+  const endpoint = `${relayUrl.replace(/\/$/, "")}/transcript`;
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -58,13 +59,29 @@ async function fetchViaRelay(videoId: string): Promise<TranscriptServerResult> {
     cache: "no-store",
   });
 
-  const data = (await res.json()) as {
+  const raw = await res.text();
+  const contentType = res.headers.get("content-type") ?? "";
+
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      `リレー URL が無効か、トンネルが停止しています（HTTP ${res.status}）。PC で npm run relay と cloudflared を再起動し、Vercel の TRANSCRIPT_RELAY_URL を更新してください。`,
+    );
+  }
+
+  let data: {
     transcript?: string;
     title?: string | null;
     thumbnailUrl?: string | null;
     durationSec?: number | null;
     error?: string;
   };
+  try {
+    data = JSON.parse(raw) as typeof data;
+  } catch {
+    throw new Error(
+      "リレーから不正な応答が返りました。トンネル URL の有効期限切れの可能性があります。",
+    );
+  }
 
   if (!res.ok || !data.transcript?.trim()) {
     throw new Error(data.error ?? "リレー経由の字幕取得に失敗しました");

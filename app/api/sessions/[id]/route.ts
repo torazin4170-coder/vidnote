@@ -4,14 +4,17 @@ import { z } from "zod";
 import {
   deleteSession,
   getSession,
+  getSessionMeta,
   updateSession,
 } from "@/lib/db/sessions";
+import { sanitizeSessionForClient } from "@/lib/session-list";
 
 const patchSchema = z.object({
   notesHtml: z.string().optional(),
   transcript: z.string().min(1).optional(),
   title: z.string().nullable().optional(),
   thumbnailUrl: z.string().nullable().optional(),
+  categoryId: z.string().nullable().optional(),
   resetForReprocess: z.boolean().optional(),
 });
 
@@ -19,11 +22,11 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
-  const session = await getSession(id);
+  const session = await getSessionMeta(id);
   if (!session) {
     return NextResponse.json({ error: "セッションが見つかりません" }, { status: 404 });
   }
-  return NextResponse.json({ session });
+  return NextResponse.json({ session: sanitizeSessionForClient(session) });
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -43,6 +46,9 @@ export async function PATCH(request: Request, context: RouteContext) {
         body.thumbnailUrl !== undefined
           ? body.thumbnailUrl
           : existing.thumbnailUrl,
+      ...(body.categoryId !== undefined
+        ? { categoryId: body.categoryId }
+        : {}),
       ...(body.transcript || body.resetForReprocess
         ? {
             status: "transcribed",
@@ -51,7 +57,9 @@ export async function PATCH(request: Request, context: RouteContext) {
           }
         : {}),
     });
-    return NextResponse.json({ session });
+    return NextResponse.json({
+      session: session ? sanitizeSessionForClient(session) : null,
+    });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "更新に失敗しました";

@@ -40,14 +40,22 @@ const statements = [
     thumbnail_url TEXT,
     duration_sec  INTEGER,
     status        TEXT NOT NULL DEFAULT 'pending',
+    category_id   TEXT,
+    transcript_raw TEXT,
     transcript    TEXT,
     summary_json  TEXT,
+    visual_explainer_html TEXT,
     notes_html    TEXT,
     error_message TEXT,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS app_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  )`,
 ];
 
 await client.batch(statements.map((sql) => ({ sql, args: [] })));

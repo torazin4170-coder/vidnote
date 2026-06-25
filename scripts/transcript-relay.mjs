@@ -1,27 +1,24 @@
 import http from "node:http";
 import { YoutubeTranscript } from "youtube-transcript";
 
+import { youtubeItemsToTranscript } from "./transcript-format.mjs";
+
 const PORT = Number(process.env.TRANSCRIPT_RELAY_PORT ?? 8787);
 const SECRET = process.env.TRANSCRIPT_RELAY_SECRET?.trim() ?? "";
-
-function segmentsToTranscript(items) {
-  if (!items.length) return "";
-  return items.map((item) => item.text.trim()).join(" ");
-}
 
 async function fetchTranscript(videoId) {
   const langs = ["ja", "ja-JP", "en", "en-US"];
   for (const lang of langs) {
     try {
       const items = await YoutubeTranscript.fetchTranscript(videoId, { lang });
-      if (items.length > 0) return segmentsToTranscript(items);
+      if (items.length > 0) return youtubeItemsToTranscript(items);
     } catch {
       // try next lang
     }
   }
   const items = await YoutubeTranscript.fetchTranscript(videoId);
   if (items.length === 0) throw new Error("字幕を取得できませんでした");
-  return segmentsToTranscript(items);
+  return youtubeItemsToTranscript(items);
 }
 
 async function fetchMetadata(videoId) {

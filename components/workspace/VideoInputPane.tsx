@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { ExternalLink, Loader2, RefreshCw } from "lucide-react";
 
 import type { Session } from "@/lib/schema";
 import { STATUS_LABELS, isProcessingStatus } from "@/lib/labels";
@@ -12,79 +12,172 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
+export type SessionAction = "reprocess" | "repolish" | "resummarize";
+
 type VideoInputPaneProps = {
   session: Session | null;
   draftUrl: string;
   isCreating: boolean;
+  pendingAction: SessionAction | null;
   width?: number;
+  geminiConfigured: boolean;
   onDraftUrlChange: (url: string) => void;
   onCreateSession: () => void;
   onReprocess: () => void;
   onResummarize: () => void;
+  onRepolish: () => void;
 };
 
 const PIPELINE_STEPS = [
   { key: "url", label: "URL 入力" },
   { key: "captions", label: "字幕取得" },
+  { key: "polish", label: "字幕校正" },
   { key: "summary", label: "要点生成" },
+  { key: "diagram", label: "図解生成" },
   { key: "notes", label: "ノート" },
 ] as const;
 
 function stepState(
   session: Session | null,
   step: (typeof PIPELINE_STEPS)[number]["key"],
-): "done" | "active" | "pending" {
+  geminiConfigured: boolean,
+): "done" | "active" | "pending" | "skipped" {
   if (!session) return step === "url" ? "active" : "pending";
 
   const { status } = session;
   if (step === "url") return "done";
+
   if (step === "captions") {
     if (status === "fetching_captions" || status === "pending") return "active";
     if (
+      status === "polishing_transcript" ||
       status === "transcribed" ||
       status === "summarizing" ||
+      status === "generating_diagram" ||
       status === "done" ||
-      status === "error"
+      (status === "error" && session.transcript)
     ) {
-      return status === "error" && !session.transcript ? "active" : "done";
+      return "done";
+    }
+    if (status === "error" && !session.transcript) return "active";
+  }
+
+  if (step === "polish") {
+    if (status === "polishing_transcript") return "active";
+    if (
+      status === "transcribed" ||
+      status === "summarizing" ||
+      status === "generating_diagram" ||
+      status === "done" ||
+      (status === "error" && session.transcript)
+    ) {
+      return session.transcriptRaw &&
+        session.transcriptRaw !== session.transcript
+        ? "done"
+        : "skipped";
+    }
+    if (status === "fetching_captions" || status === "pending") {
+      return "pending";
     }
   }
+
   if (step === "summary") {
     if (status === "summarizing") return "active";
-    if (status === "done" && session.summaryJson) return "done";
+    if (
+      status === "generating_diagram" ||
+      (status === "done" && session.summaryJson)
+    ) {
+      return "done";
+    }
     if (status === "transcribed") return "active";
   }
+
+  if (step === "diagram") {
+    if (!geminiConfigured) return "skipped";
+    if (status === "generating_diagram") return "active";
+    if (status === "done" && session.hasVisualExplainer) return "done";
+    if (status === "summarizing" || status === "transcribed") return "pending";
+    if (status === "done" && session.summaryJson) return "skipped";
+  }
+
   if (step === "notes") {
     if (session.notesHtml) return "done";
   }
+
   return "pending";
+}
+
+type ActionButtonProps = {
+  action: SessionAction;
+  pendingAction: SessionAction | null;
+  label: string;
+  pendingLabel: string;
+  disabled?: boolean;
+  onClick: () => void;
+};
+
+function ActionButton({
+  action,
+  pendingAction,
+  label,
+  pendingLabel,
+  disabled = false,
+  onClick,
+}: ActionButtonProps) {
+  const pending = pendingAction === action;
+
+  return (
+    <Button
+      type="button"
+      variant={pending ? "secondary" : "outline"}
+      size="sm"
+      disabled={disabled || pendingAction != null}
+      aria-busy={pending}
+      onClick={onClick}
+    >
+      {pending ? (
+        <Loader2 className="animate-spin" />
+      ) : (
+        <RefreshCw />
+      )}
+      {pending ? pendingLabel : label}
+    </Button>
+  );
 }
 
 export function VideoInputPane({
   session,
   draftUrl,
   isCreating,
+  pendingAction,
   width = 300,
+  geminiConfigured,
   onDraftUrlChange,
   onCreateSession,
   onReprocess,
   onResummarize,
+  onRepolish,
 }: VideoInputPaneProps) {
   const processing = session ? isProcessingStatus(session.status) : isCreating;
+  const actionBusy = pendingAction != null;
   const thumbnailSrc =
     session?.youtubeId != null
       ? youtubeThumbnailUrl(session.youtubeId)
       : session?.thumbnailUrl;
   const progressValue =
     session?.status === "fetching_captions"
-      ? 35
-      : session?.status === "summarizing"
-        ? 75
-        : session?.status === "done"
-          ? 100
-          : session?.status === "transcribed"
-            ? 50
-            : 10;
+      ? 20
+      : session?.status === "polishing_transcript"
+        ? 40
+        : session?.status === "summarizing"
+          ? 65
+          : session?.status === "generating_diagram"
+            ? 85
+            : session?.status === "done"
+              ? 100
+              : session?.status === "transcribed"
+                ? 50
+                : 10;
 
   return (
     <div
@@ -161,7 +254,15 @@ export function VideoInputPane({
               処理パイプライン
             </p>
             {PIPELINE_STEPS.map((step, index) => {
-              const state = stepState(session, step.key);
+              const state = stepState(session, step.key, geminiConfigured);
+              const stateLabel =
+                state === "done"
+                  ? "●"
+                  : state === "active"
+                    ? "◐"
+                    : state === "skipped"
+                      ? "—"
+                      : "○";
               return (
                 <div key={step.key} className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-2 text-xs">
@@ -174,8 +275,8 @@ export function VideoInputPane({
                             : "text-muted-foreground"
                       }
                     >
-                      {state === "done" ? "●" : state === "active" ? "◐" : "○"}{" "}
-                      {step.label}
+                      {stateLabel} {step.label}
+                      {state === "skipped" ? "（OFF）" : ""}
                     </span>
                     {session && state === "active" && (
                       <Badge variant="secondary">
@@ -196,12 +297,25 @@ export function VideoInputPane({
                 aria-valuenow={progressValue}
                 aria-valuemin={0}
                 aria-valuemax={100}
+                aria-label="処理の進捗"
               >
                 <div
-                  className="h-full bg-primary transition-all"
+                  className={cn(
+                    "h-full bg-primary transition-all",
+                    actionBusy && "animate-pulse",
+                  )}
                   style={{ width: `${progressValue}%` }}
                 />
               </div>
+            )}
+            {actionBusy && pendingAction && (
+              <p className="text-xs text-muted-foreground" aria-live="polite">
+                {pendingAction === "reprocess"
+                  ? "字幕を再取得しています…"
+                  : pendingAction === "repolish"
+                    ? "字幕を校正しています…"
+                    : "要点を再生成しています…"}
+              </p>
             )}
           </div>
 
@@ -211,26 +325,32 @@ export function VideoInputPane({
 
           {session && (
             <div className="flex flex-col gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
+              <ActionButton
+                action="reprocess"
+                pendingAction={pendingAction}
+                label="字幕を再取得"
+                pendingLabel="再取得中…"
+                disabled={processing && !actionBusy}
                 onClick={onReprocess}
-                disabled={processing}
-              >
-                <RefreshCw />
-                字幕を再取得
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
+              />
+              {geminiConfigured ? (
+                <ActionButton
+                  action="repolish"
+                  pendingAction={pendingAction}
+                  label="字幕を再校正"
+                  pendingLabel="校正中…"
+                  disabled={(processing && !actionBusy) || !session.transcript}
+                  onClick={onRepolish}
+                />
+              ) : null}
+              <ActionButton
+                action="resummarize"
+                pendingAction={pendingAction}
+                label="要約を再生成"
+                pendingLabel="生成中…"
+                disabled={(processing && !actionBusy) || !session.transcript}
                 onClick={onResummarize}
-                disabled={processing || !session.transcript}
-              >
-                <RefreshCw />
-                要約を再生成
-              </Button>
+              />
             </div>
           )}
         </div>

@@ -3,21 +3,38 @@
 import { useMemo, useState } from "react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
-import { MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import {
+  FolderOpen,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Settings2,
+  Tag,
+  Trash2,
+  X,
+} from "lucide-react";
 
-import type { Session } from "@/lib/schema";
+import type { Category, CategoryFilter, Session } from "@/lib/schema";
 import { sessionStatusIcons } from "@/lib/labels";
+import { sessionMatchesCategoryFilter } from "@/lib/session-filter";
 import { youtubeThumbnailUrl } from "@/lib/youtube/parse-url";
+import { CategoryManageDialog } from "@/components/workspace/CategoryManageDialog";
 import { DeleteConfirmDialog } from "@/components/workspace/DeleteConfirmDialog";
 import { Pane1Toggle } from "@/components/workspace/Pane1Toggle";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Sidebar,
   SidebarContent,
@@ -34,11 +51,24 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 type SessionLibraryPaneProps = {
   sessions: Session[];
+  categories: Category[];
   selectedSessionId: string | null;
+  searchQuery: string;
+  categoryFilter: CategoryFilter;
+  isSearching?: boolean;
+  onSearchQueryChange: (query: string) => void;
+  onCategoryFilterChange: (filter: CategoryFilter) => void;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
   onDeleteSession: (id: string) => void | Promise<void>;
   onDeleteAllSessions: () => void;
+  onAssignCategory: (
+    sessionId: string,
+    categoryId: string | null,
+  ) => void | Promise<void>;
+  onCreateCategory: (name: string) => void | Promise<void>;
+  onUpdateCategory: (id: string, name: string) => void | Promise<void>;
+  onDeleteCategory: (id: string) => void | Promise<void>;
 };
 
 function groupLabel(dateStr: string): string {
@@ -61,15 +91,53 @@ function groupSessions(sessions: Session[]): Map<string, Session[]> {
 
 export function SessionLibraryPane({
   sessions,
+  categories,
   selectedSessionId,
+  searchQuery,
+  categoryFilter,
+  isSearching = false,
+  onSearchQueryChange,
+  onCategoryFilterChange,
   onSelectSession,
   onNewSession,
   onDeleteSession,
   onDeleteAllSessions,
+  onAssignCategory,
+  onCreateCategory,
+  onUpdateCategory,
+  onDeleteCategory,
 }: SessionLibraryPaneProps) {
   const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
-  const groups = useMemo(() => groupSessions(sessions), [sessions]);
+  const [categoryManageOpen, setCategoryManageOpen] = useState(false);
+
+  const visibleSessions = useMemo(
+    () =>
+      sessions.filter((session) =>
+        sessionMatchesCategoryFilter(session, categoryFilter),
+      ),
+    [sessions, categoryFilter],
+  );
+
+  const groups = useMemo(
+    () => groupSessions(visibleSessions),
+    [visibleSessions],
+  );
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const session of sessions) {
+      if (session.categoryId) {
+        counts.set(session.categoryId, (counts.get(session.categoryId) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [sessions]);
+
+  const uncategorizedCount = useMemo(
+    () => sessions.filter((s) => s.categoryId == null).length,
+    [sessions],
+  );
 
   return (
     <>
@@ -85,6 +153,97 @@ export function SessionLibraryPane({
         </SidebarHeader>
 
         <SidebarContent>
+          <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+            <SidebarGroupContent>
+              <div className="flex flex-col gap-2 px-2 pt-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="タイトル・字幕・ノートを検索"
+                    value={searchQuery}
+                    className="pl-8 pr-8"
+                    onChange={(e) => onSearchQueryChange(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="absolute top-1/2 right-1 -translate-y-1/2"
+                      onClick={() => onSearchQueryChange("")}
+                    >
+                      <X />
+                      <span className="sr-only">検索をクリア</span>
+                    </Button>
+                  )}
+                </div>
+                {isSearching && (
+                  <p className="px-1 text-xs text-muted-foreground">検索中…</p>
+                )}
+              </div>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarGroup>
+            <SidebarGroupLabel className="flex items-center justify-between group-data-[collapsible=icon]:hidden">
+              <span>カテゴリー</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setCategoryManageOpen(true)}
+              >
+                <Settings2 />
+                <span className="sr-only">カテゴリー管理</span>
+              </Button>
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={categoryFilter === "all"}
+                    onClick={() => onCategoryFilterChange("all")}
+                    tooltip="すべて"
+                  >
+                    <FolderOpen />
+                    <span>すべて</span>
+                    <span className="ml-auto text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+                      {sessions.length}
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={categoryFilter === "uncategorized"}
+                    onClick={() => onCategoryFilterChange("uncategorized")}
+                    tooltip="未分類"
+                  >
+                    <Tag />
+                    <span>未分類</span>
+                    <span className="ml-auto text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+                      {uncategorizedCount}
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {categories.map((category) => (
+                  <SidebarMenuItem key={category.id}>
+                    <SidebarMenuButton
+                      isActive={categoryFilter === category.id}
+                      onClick={() => onCategoryFilterChange(category.id)}
+                      tooltip={category.name}
+                    >
+                      <Tag />
+                      <span className="truncate">{category.name}</span>
+                      <span className="ml-auto text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+                        {categoryCounts.get(category.id) ?? 0}
+                      </span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
           <SidebarGroup>
             <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">
               セッション
@@ -114,9 +273,13 @@ export function SessionLibraryPane({
           </SidebarGroup>
 
           <ScrollArea className="min-h-0 flex-1">
-            {sessions.length === 0 ? (
+            {visibleSessions.length === 0 ? (
               <p className="px-3 py-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-                履歴はありません
+                {searchQuery.trim()
+                  ? "検索結果はありません"
+                  : categoryFilter !== "all"
+                    ? "このカテゴリーに動画はありません"
+                    : "履歴はありません"}
               </p>
             ) : (
               [...groups.entries()].map(([label, items]) => (
@@ -153,6 +316,14 @@ export function SessionLibraryPane({
                                 {session.title ?? "無題の動画"}
                               </span>
                               <span className="ml-auto flex items-center gap-1 group-data-[collapsible=icon]:hidden">
+                                {session.categoryName && (
+                                  <Badge
+                                    variant="outline"
+                                    className="max-w-16 truncate text-[10px]"
+                                  >
+                                    {session.categoryName}
+                                  </Badge>
+                                )}
                                 {icons.processing && (
                                   <Badge
                                     variant="secondary"
@@ -179,6 +350,37 @@ export function SessionLibraryPane({
                               />
                               <DropdownMenuContent side="right" align="start">
                                 <DropdownMenuGroup>
+                                  <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                      <Tag />
+                                      カテゴリーを変更
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent>
+                                      <DropdownMenuItem
+                                        onClick={() =>
+                                          void onAssignCategory(session.id, null)
+                                        }
+                                      >
+                                        未分類
+                                      </DropdownMenuItem>
+                                      {categories.length > 0 && (
+                                        <DropdownMenuSeparator />
+                                      )}
+                                      {categories.map((category) => (
+                                        <DropdownMenuItem
+                                          key={category.id}
+                                          onClick={() =>
+                                            void onAssignCategory(
+                                              session.id,
+                                              category.id,
+                                            )
+                                          }
+                                        >
+                                          {category.name}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuSubContent>
+                                  </DropdownMenuSub>
                                   <DropdownMenuItem
                                     variant="destructive"
                                     onClick={() => setDeleteTarget(session)}
@@ -200,6 +402,15 @@ export function SessionLibraryPane({
           </ScrollArea>
         </SidebarContent>
       </Sidebar>
+
+      <CategoryManageDialog
+        open={categoryManageOpen}
+        onOpenChange={setCategoryManageOpen}
+        categories={categories}
+        onCreateCategory={onCreateCategory}
+        onUpdateCategory={onUpdateCategory}
+        onDeleteCategory={onDeleteCategory}
+      />
 
       <DeleteConfirmDialog
         open={deleteTarget != null}

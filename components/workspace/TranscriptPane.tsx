@@ -33,7 +33,7 @@ function highlightText(text: string, query: string) {
   );
 }
 
-/** 旧形式（タイムスタンプ行付き）の transcript も表示できるよう正規化 */
+/** Legacy timestamp lines are normalized for display. */
 function normalizeTranscript(raw: string): string {
   const lines = raw.split("\n");
   const paragraphs: string[] = [];
@@ -73,7 +73,7 @@ export function TranscriptPane({
   const searchRef = useRef<HTMLInputElement>(null);
 
   const displayText = useMemo(() => {
-    if (!session?.transcript) return "";
+    if (!session?.transcript?.trim()) return "";
     return normalizeTranscript(session.transcript);
   }, [session?.transcript]);
 
@@ -96,7 +96,11 @@ export function TranscriptPane({
 
   const paragraphs = useMemo(() => {
     if (!displayText) return [];
-    return displayText.split("\n\n").filter(Boolean);
+    const parts = displayText.split("\n\n").filter(Boolean);
+    if (parts.length > 150) {
+      return [displayText];
+    }
+    return parts;
   }, [displayText]);
 
   return (

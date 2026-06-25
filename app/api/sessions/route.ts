@@ -16,10 +16,13 @@ const createSchema = z.object({
   transcript: z.string().min(1).optional(),
   title: z.string().nullable().optional(),
   thumbnailUrl: z.string().nullable().optional(),
+  categoryId: z.string().nullable().optional(),
 });
 
-export async function GET() {
-  const sessions = await listSessionSummaries();
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const search = url.searchParams.get("search") ?? undefined;
+  const sessions = await listSessionSummaries({ search });
   return NextResponse.json({ sessions });
 }
 
@@ -42,6 +45,7 @@ export async function POST(request: Request) {
       transcript: body.transcript,
       title: body.title,
       thumbnailUrl: body.thumbnailUrl,
+      categoryId: body.categoryId,
     });
 
     return NextResponse.json({ session }, { status: 201 });

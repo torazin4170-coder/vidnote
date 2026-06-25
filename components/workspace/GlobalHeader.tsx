@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Settings } from "lucide-react";
 
 import type { Session, SessionStatus } from "@/lib/schema";
 import type { FocusMode } from "@/lib/schema";
 import { STATUS_LABELS } from "@/lib/labels";
 import { ThemeToggle } from "@/components/workspace/ThemeToggle";
+import { GeminiUsagePanel } from "@/components/workspace/GeminiUsagePanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,7 +42,11 @@ function statusBadgeVariant(
 ): "default" | "secondary" | "destructive" | "outline" {
   if (status === "error") return "destructive";
   if (status === "done") return "outline";
-  if (status === "fetching_captions" || status === "summarizing") {
+  if (
+    status === "fetching_captions" ||
+    status === "polishing_transcript" ||
+    status === "summarizing"
+  ) {
     return "default";
   }
   return "secondary";
@@ -53,6 +59,56 @@ export function GlobalHeader({
   onFocusModeChange,
 }: GlobalHeaderProps) {
   const title = session?.title ?? "セッション未選択";
+  const [polishTranscript, setPolishTranscript] = useState(true);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/settings", { credentials: "include" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { polishTranscript?: boolean };
+        if (!cancelled && typeof data.polishTranscript === "boolean") {
+          setPolishTranscript(data.polishTranscript);
+        }
+      } finally {
+        if (!cancelled) setSettingsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const togglePolishTranscript = async () => {
+    if (!geminiConfigured || settingsSaving) return;
+    const next = !polishTranscript;
+    setSettingsSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ polishTranscript: next }),
+      });
+      const data = (await res.json()) as {
+        polishTranscript?: boolean;
+        error?: string;
+      };
+      if (!res.ok) {
+        alert(data.error ?? "設定の更新に失敗しました");
+        return;
+      }
+      if (typeof data.polishTranscript === "boolean") {
+        setPolishTranscript(data.polishTranscript);
+      }
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3">
@@ -98,7 +154,7 @@ export function GlobalHeader({
 
         <ThemeToggle />
 
-        <Dialog>
+        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
           <Tooltip>
             <TooltipTrigger
               render={
@@ -118,7 +174,7 @@ export function GlobalHeader({
             />
             <TooltipContent>設定</TooltipContent>
           </Tooltip>
-          <DialogContent>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>設定</DialogTitle>
               <DialogDescription>
@@ -134,6 +190,31 @@ export function GlobalHeader({
                     : "未設定 — 字幕取得のみ利用可能"}
                 </span>
               </div>
+              {geminiConfigured ? (
+                <div className="flex flex-col gap-2">
+                  <span className="font-medium">字幕校正（AI）</span>
+                  <p className="text-muted-foreground">
+                    取得した字幕の誤字修正と段落整形を Gemini
+                    で行います。新規処理と「字幕を再校正」に適用されます。
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={polishTranscript ? "default" : "outline"}
+                    disabled={settingsLoading || settingsSaving}
+                    onClick={() => void togglePolishTranscript()}
+                  >
+                    {settingsSaving
+                      ? "保存中…"
+                      : polishTranscript
+                        ? "ON — 自動校正する"
+                        : "OFF — 原文のまま"}
+                  </Button>
+                </div>
+              ) : null}
+              {geminiConfigured ? (
+                <GeminiUsagePanel active={settingsOpen} />
+              ) : null}
               {!geminiConfigured && (
                 <p className="text-muted-foreground">
                   <a
@@ -144,7 +225,8 @@ export function GlobalHeader({
                   >
                     Google AI Studio
                   </a>
-                  {" "}で無料 API キーを取得し、.env.local に GEMINI_API_KEY
+                  {" "}
+                  で無料 API キーを取得し、.env.local に GEMINI_API_KEY
                   を設定して開発サーバーを再起動してください。
                 </p>
               )}

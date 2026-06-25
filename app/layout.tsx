@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -11,6 +12,8 @@ const inter = Inter({
   variable: "--font-inter",
   display: "swap",
 });
+
+const themeInitScript = `(function(){try{var t=localStorage.getItem("vidnote-theme");if(t==="dark")document.documentElement.classList.add("dark")}catch(e){}})()`;
 
 export const metadata: Metadata = {
   title: "VidNote",
@@ -36,12 +39,10 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem={false}
-          storageKey="vidnote-theme"
-        >
+        <Script id="vidnote-theme-init" strategy="beforeInteractive">
+          {themeInitScript}
+        </Script>
+        <ThemeProvider>
           <TooltipProvider delay={300}>{children}</TooltipProvider>
         </ThemeProvider>
       </body>

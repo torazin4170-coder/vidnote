@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta property="og:title" content="<!-- TITLE -->">
+  <meta property="og:description" content="<!-- DESCRIPTION -->">
+  <meta property="og:type" content="article">
+  <title><!-- TITLE --></title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFFFFF'/><rect x='8' y='8' width='84' height='84' rx='14' fill='none' stroke='%233B82F6' stroke-width='4'/><circle cx='32' cy='40' r='10' fill='%233B82F6' opacity='0.8'/><circle cx='68' cy='40' r='10' fill='%2360A5FA' opacity='0.8'/><rect x='25' y='62' width='50' height='6' rx='3' fill='%2394A3B8' opacity='0.6'/><rect x='30' y='74' width='40' height='6' rx='3' fill='%2394A3B8' opacity='0.3'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style id="visual-explainer-theme-vars">
+    :root {
+      --ads-bg: #ffffff;
+      --ads-surface: #f8fafc;
+      --ads-hover: #f1f5f9;
+      --ads-border: #e2e8f0;
+      --ads-text: #1e293b;
+      --ads-muted: #64748b;
+      --ads-dim: #94a3b8;
+    }
+    html.dark {
+      --ads-bg: #0f172a;
+      --ads-surface: #1e293b;
+      --ads-hover: #334155;
+      --ads-border: #334155;
+      --ads-text: #e2e8f0;
+      --ads-muted: #94a3b8;
+      --ads-dim: #64748b;
+    }
+    html.dark,
+    html.dark body {
+      background-color: var(--ads-bg) !important;
+      color: var(--ads-muted) !important;
+    }
+    html.dark .bg-ads-bg,
+    html.dark .bg-white {
+      background-color: var(--ads-bg) !important;
+    }
+    html.dark .bg-ads-surface,
+    html.dark .bg-slate-50,
+    html.dark .bg-slate-100 {
+      background-color: var(--ads-surface) !important;
+    }
+    html.dark .bg-ads-hover,
+    html.dark .bg-slate-200 {
+      background-color: var(--ads-hover) !important;
+    }
+    html.dark .text-ads-text,
+    html.dark .text-slate-800,
+    html.dark .text-slate-700,
+    html.dark .text-slate-600 {
+      color: var(--ads-text) !important;
+    }
+    html.dark .text-ads-muted,
+    html.dark .text-slate-500 {
+      color: var(--ads-muted) !important;
+    }
+    html.dark .text-ads-dim,
+    html.dark .text-slate-400 {
+      color: var(--ads-dim) !important;
+    }
+    html.dark .border-ads-border,
+    html.dark .border-slate-200,
+    html.dark .border-slate-300,
+    html.dark .border-gray-200 {
+      border-color: var(--ads-border) !important;
+    }
+    @media print {
+      .no-print { display: none !important; }
+      body { border-top: none !important; }
+      .rounded-xl { break-inside: avoid; }
+      .md\:flex-row { flex-direction: row !important; }
+      .md\:hidden { display: none !important; }
+      .hidden.md\:block { display: block !important; }
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .md\:mb-20 { margin-bottom: 5rem !important; }
+      .md\:py-16 { padding-top: 4rem !important; padding-bottom: 4rem !important; }
+      .bg-clip-text.text-transparent {
+        -webkit-background-clip: initial !important;
+        background-clip: initial !important;
+        color: #2563EB !important;
+        -webkit-text-fill-color: #2563EB !important;
+      }
+    }
+    /* AI 生成図解のレイアウト安全策 */
+    main .absolute,
+    main .relative { position: static !important; }
+    main i[data-lucide] { flex-shrink: 0; }
+    main .break-words { overflow-wrap: anywhere; word-break: break-word; }
+    main .rounded-xl,
+    main .rounded-2xl { padding: 1.25rem; }
+  </style>
+  <link rel="stylesheet" href="/visual-explainer/diagram.css">
+</head>
+<body class="bg-ads-bg text-ads-muted antialiased leading-relaxed border-t-4 border-ads-accent">
+  <div class="no-print max-w-3xl mx-auto px-5 pt-2 flex justify-end gap-3">
+    <button type="button" id="theme-toggle" class="flex items-center gap-1.5 text-xs text-ads-dim hover:text-ads-accent transition-colors cursor-pointer">
+      <i data-lucide="moon" class="w-3.5 h-3.5"></i>
+      <span id="theme-toggle-label">ダーク</span>
+    </button>
+    <button type="button" onclick="window.print()" class="flex items-center gap-1.5 text-xs text-ads-dim hover:text-ads-accent transition-colors cursor-pointer">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
+      PDF
+    </button>
+  </div>
+  <main class="max-w-3xl mx-auto px-5 py-10 md:py-16">
+<!-- CONTENT_START -->
+
+<!-- CONTENT_END -->
+  </main>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    function updateThemeToggleLabel() {
+      var isDark = document.documentElement.classList.contains('dark');
+      var label = document.getElementById('theme-toggle-label');
+      var icon = document.querySelector('#theme-toggle i');
+      if (label) label.textContent = isDark ? 'ライト' : 'ダーク';
+      if (icon) icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    document.getElementById('theme-toggle').addEventListener('click', function () {
+      document.documentElement.classList.toggle('dark');
+      updateThemeToggleLabel();
+    });
+
+    updateThemeToggleLabel();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

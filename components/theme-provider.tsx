@@ -1,10 +1,67 @@
 "use client";
 
 import {
-  ThemeProvider as NextThemesProvider,
-  type ThemeProviderProps,
-} from "next-themes";
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
+const STORAGE_KEY = "vidnote-theme";
+
+type Theme = "light" | "dark";
+
+type ThemeContextValue = {
+  theme: Theme;
+  resolvedTheme: Theme;
+  setTheme: (theme: Theme) => void;
+};
+
+const ThemeContext = createContext<ThemeContextValue | null>(null);
+
+function applyTheme(theme: Theme) {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+}
+
+function readInitialTheme(): Theme {
+  if (typeof window === "undefined") return "light";
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === "dark" || stored === "light") return stored;
+  } catch {
+    /* ignore */
+  }
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setThemeState] = useState<Theme>(readInitialTheme);
+
+  const setTheme = useCallback((next: Theme) => {
+    setThemeState(next);
+    localStorage.setItem(STORAGE_KEY, next);
+    applyTheme(next);
+  }, []);
+
+  const value = useMemo(
+    () => ({
+      theme,
+      resolvedTheme: theme,
+      setTheme,
+    }),
+    [setTheme, theme],
+  );
+
+  return (
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  );
+}
+
+export function useTheme() {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    throw new Error("useTheme must be used within ThemeProvider");
+  }
+  return context;
 }

@@ -1,21 +1,24 @@
 import { NextResponse } from "next/server";
 
-import { getSession } from "@/lib/db/sessions";
+import { getSession, getSessionMeta } from "@/lib/db/sessions";
+import { sanitizeSessionForClient } from "@/lib/session-list";
 import {
   drainJobQueue,
+  generateDiagramSession,
   reprocessSession,
+  repolishSession,
   summarizeSession,
 } from "@/lib/jobs/processor";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-function errorResponse(session: NonNullable<Awaited<ReturnType<typeof getSession>>>) {
+function errorResponse(session: NonNullable<Awaited<ReturnType<typeof getSessionMeta>>>) {
   return NextResponse.json(
     {
       error: session.errorMessage ?? "処理に失敗しました",
-      session,
+      session: sanitizeSessionForClient(session),
     },
     { status: 400 },
   );
@@ -34,25 +37,32 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     if (action === "resummarize" || action === "summarize") {
       await summarizeSession(id);
+    } else if (action === "repolish") {
+      await repolishSession(id);
+    } else if (action === "diagram" || action === "rediagram") {
+      await generateDiagramSession(id);
     } else {
       await reprocessSession(id);
       await drainJobQueue();
     }
 
-    const updated = await getSession(id);
+    const updated = await getSessionMeta(id);
     if (!updated) {
       return NextResponse.json({ error: "セッションが見つかりません" }, { status: 404 });
     }
     if (updated.status === "error") {
       return errorResponse(updated);
     }
-    return NextResponse.json({ session: updated });
+    return NextResponse.json({ session: sanitizeSessionForClient(updated) });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "処理の開始に失敗しました";
-    const updated = await getSession(id);
+    const updated = await getSessionMeta(id);
     return NextResponse.json(
-      { error: message, session: updated ?? undefined },
+      {
+        error: message,
+        session: updated ? sanitizeSessionForClient(updated) : undefined,
+      },
       { status: 400 },
     );
   }

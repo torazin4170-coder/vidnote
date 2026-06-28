@@ -18,6 +18,11 @@ export function sessionMatchesSearch(session: Session, query: string): boolean {
     session.transcript,
     session.summaryJson?.overview,
     ...(session.summaryJson?.keyPoints ?? []),
+    ...(session.summaryJson?.frameworkViews?.flatMap((view) => [
+      view.framework,
+      view.title,
+      ...view.items,
+    ]) ?? []),
   ]
     .filter(Boolean)
     .join(" ")

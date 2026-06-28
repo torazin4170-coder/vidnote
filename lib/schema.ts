@@ -13,11 +13,30 @@ export const sessionStatusSchema = z.enum([
 
 export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 
+export const frameworkApproachSchema = z.enum([
+  "decompose",
+  "structure",
+  "essence",
+  "perspective",
+]);
+
+export type FrameworkApproach = z.infer<typeof frameworkApproachSchema>;
+
+export const frameworkViewSchema = z.object({
+  framework: z.string(),
+  approach: frameworkApproachSchema,
+  title: z.string(),
+  items: z.array(z.string()).min(1),
+});
+
+export type FrameworkView = z.infer<typeof frameworkViewSchema>;
+
 export const summarySectionSchema = z.object({
   overview: z.string(),
   keyPoints: z.array(z.string()),
   terms: z.array(z.object({ term: z.string(), definition: z.string() })),
   actions: z.array(z.string()),
+  frameworkViews: z.array(frameworkViewSchema).default([]),
 });
 
 export type SummarySections = z.infer<typeof summarySectionSchema>;

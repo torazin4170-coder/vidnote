@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getSessionDiagramHtml } from "@/lib/db/sessions";
 import { applyThemeToVisualExplainerHtml } from "@/lib/visual-explainer/apply-theme";
+import { fixChartBarScales } from "@/lib/visual-explainer/fix-chart-bars";
 import { optimizeDiagramHtmlForBrowser } from "@/lib/visual-explainer/optimize-html";
 import type { VisualExplainerTheme } from "@/lib/visual-explainer/theme";
 
@@ -25,7 +26,7 @@ export async function GET(request: Request, context: RouteContext) {
   const url = new URL(request.url);
   const theme = parseTheme(url.searchParams.get("theme"));
   const body = optimizeDiagramHtmlForBrowser(
-    applyThemeToVisualExplainerHtml(html, theme),
+    fixChartBarScales(applyThemeToVisualExplainerHtml(html, theme)),
   );
 
   return new NextResponse(body, {

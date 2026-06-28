@@ -46,8 +46,12 @@ export function buildVisualExplainerCopyText(input: {
     : "";
 
   return [
-    "以下の YouTube 動画の内容を、creating-visual-explainers の図解 HTML 形式で図解してください。",
+    "以下の YouTube 動画の内容を、VidNote 図解 HTML 形式で図解してください。",
     "Tailwind CSS クラスと Lucide Icons のみを使い、<main> 内のコンテンツ断片として出力してください。",
+    "本文の強調は font-bold text-ads-text（太字）を基本とし、色付き span はセクション全体で0〜2箇所に抑えること。",
+    "参考トーン: https://ads_lecture_4_diagram.surge.sh/ （色はカード構造・見出しに使い、本文は控えめ）",
+    "数値・割合・比較データがあればプログレスバーまたは横棒グラフで視覚化すること。",
+    "セクションごとに番号バッジ＋問いかけサブタイトル＋左右対比/グラフ/引用ボックス等のビジュアルパターンを使うこと。",
     "",
     `# ${title}`,
     "",

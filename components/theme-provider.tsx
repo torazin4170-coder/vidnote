@@ -25,14 +25,14 @@ function applyTheme(theme: Theme) {
 }
 
 function readInitialTheme(): Theme {
-  if (typeof window === "undefined") return "light";
+  if (typeof window === "undefined") return "dark";
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === "dark" || stored === "light") return stored;
   } catch {
     /* ignore */
   }
-  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+  return "dark";
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

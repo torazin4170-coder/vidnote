@@ -63,8 +63,12 @@ async function fetchViaRelay(videoId: string): Promise<TranscriptServerResult> {
   const contentType = res.headers.get("content-type") ?? "";
 
   if (!contentType.includes("application/json")) {
+    const hint =
+      res.status === 502 || res.status === 503
+        ? "npm run relay だけでは不十分です。デスクトップの「VidNote Relay」または scripts/start-relay-tunnel.ps1 で cloudflared トンネルも起動し、Vercel の TRANSCRIPT_RELAY_URL を更新してください。"
+        : "PC で npm run relay と cloudflared を再起動し、Vercel の TRANSCRIPT_RELAY_URL を更新してください。";
     throw new Error(
-      `リレー URL が無効か、トンネルが停止しています（HTTP ${res.status}）。PC で npm run relay と cloudflared を再起動し、Vercel の TRANSCRIPT_RELAY_URL を更新してください。`,
+      `リレー URL が無効か、トンネルが停止しています（HTTP ${res.status}）。${hint}`,
     );
   }
 

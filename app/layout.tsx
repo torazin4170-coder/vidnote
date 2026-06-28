@@ -13,7 +13,7 @@ const inter = Inter({
   display: "swap",
 });
 
-const themeInitScript = `(function(){try{var t=localStorage.getItem("vidnote-theme");if(t==="dark")document.documentElement.classList.add("dark")}catch(e){}})()`;
+const themeInitScript = `(function(){try{var t=localStorage.getItem("vidnote-theme");if(t!=="light")document.documentElement.classList.add("dark")}catch(e){document.documentElement.classList.add("dark")}})()`;
 
 export const metadata: Metadata = {
   title: "VidNote",
@@ -35,7 +35,7 @@ export default function RootLayout({
   return (
     <html
       lang="ja"
-      className={`${inter.variable} h-full antialiased`}
+      className={`${inter.variable} h-full antialiased dark`}
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">

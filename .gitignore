@@ -42,5 +42,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+diagram-workspace/session.target.json
+diagram-workspace/input/prompt.md
 .vercel
 .vercel-deploy-password.txt

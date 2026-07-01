@@ -64,6 +64,7 @@ export function buildVisualExplainerCopyText(input: {
     "数値・割合・比較データがあればプログレスバーまたは横棒グラフで視覚化すること。",
     "frameworkViews があれば図解の参考にするが、5W1H・マトリクス等の型に毎回合わせる必要はない。動画内容に最適なレイアウトを選ぶこと。",
     "セクションごとに番号バッジ＋問いかけサブタイトル＋左右対比/グラフ/引用ボックス等のビジュアルパターンを使うこと。",
+    "完成 HTML は diagram-workspace/output/diagram.html に保存すること（VidNote へ自動取り込みされます）。",
     "",
     `# ${title}`,
     "",

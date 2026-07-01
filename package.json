@@ -12,7 +12,12 @@
     "check:turso": "node scripts/check-turso.mjs",
     "db:init": "node scripts/db-init.mjs",
     "db:migrate-local": "node scripts/migrate-to-turso.mjs",
-    "relay": "node scripts/transcript-relay.mjs"
+    "relay": "node scripts/transcript-relay.mjs",
+    "diagram:open": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-vidnote-diagram.ps1",
+    "diagram:shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-vidnote-diagram-shortcut.ps1",
+    "diagram:import": "npx --yes tsx scripts/import-diagram-cli.ts",
+    "diagram:watch": "node scripts/watch-diagram.mjs",
+    "diagram:session-target": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/copy-session-target.ps1"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

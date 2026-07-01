@@ -33,7 +33,7 @@ const PIPELINE_STEPS = [
   { key: "captions", label: "字幕取得" },
   { key: "polish", label: "字幕校正" },
   { key: "summary", label: "要点生成" },
-  { key: "diagram", label: "図解生成" },
+  { key: "diagram", label: "図解（任意）" },
   { key: "notes", label: "ノート" },
 ] as const;
 
@@ -93,11 +93,10 @@ function stepState(
   }
 
   if (step === "diagram") {
-    if (!geminiConfigured) return "skipped";
     if (status === "generating_diagram") return "active";
-    if (status === "done" && session.hasVisualExplainer) return "done";
+    if (session.hasVisualExplainer) return "done";
+    if (status === "done" && session.summaryJson) return "pending";
     if (status === "summarizing" || status === "transcribed") return "pending";
-    if (status === "done" && session.summaryJson) return "skipped";
   }
 
   if (step === "notes") {

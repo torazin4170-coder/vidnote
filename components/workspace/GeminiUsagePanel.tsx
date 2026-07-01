@@ -55,7 +55,7 @@ function RateLimitBanner({ rateLimit }: { rateLimit: GeminiRateLimitStatus }) {
         本処理可能
       </p>
       <p className="text-xs text-muted-foreground">
-        1本あたり約 {rateLimit.callsPerVideo} 回の API 呼び出し（校正・要約・図解）。
+        1本あたり約 {rateLimit.callsPerVideo} 回の API 呼び出し（校正・要約。図解は任意）。
         本日残り {formatCount(rateLimit.remainingRequestsToday)} 回 / 直近1分残り{" "}
         {formatCount(rateLimit.remainingRequestsMinute)} 回。
       </p>

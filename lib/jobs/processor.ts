@@ -144,10 +144,9 @@ async function processSession(sessionId: string): Promise<void> {
 
     await updateSession(sessionId, {
       summaryJson: JSON.stringify(summary),
+      status: "done",
       errorMessage: null,
     });
-
-    await generateDiagramSession(sessionId, { throwOnError: false });
   } catch (err) {
     if (err instanceof GeminiDailyQuotaExceededError) {
       await deferSessionForGeminiQuota(sessionId, err.message);
@@ -182,9 +181,9 @@ export async function summarizeSession(sessionId: string): Promise<void> {
     });
     await updateSession(sessionId, {
       summaryJson: JSON.stringify(summary),
+      status: "done",
       errorMessage: null,
     });
-    await generateDiagramSession(sessionId, { throwOnError: false });
   } catch (err) {
     const message = friendlyGeminiError(err);
     await updateSession(sessionId, {

@@ -7,8 +7,8 @@ import {
   ClipboardCopy,
   ExternalLink,
   ImageIcon,
-  Loader2,
   RefreshCw,
+  Upload,
 } from "lucide-react";
 
 import type { Session, SummarySections } from "@/lib/schema";
@@ -17,7 +17,12 @@ import {
   buildVisualExplainerCopyText,
   type CopyPromptMode,
 } from "@/lib/visual-explainer/copy-prompt";
+import {
+  formatLongVideoThresholdMinutes,
+  recommendCursorDiagram,
+} from "@/lib/visual-explainer/diagram-policy";
 import { openVisualExplainerInNewTab } from "@/lib/visual-explainer/open-tab";
+import { downloadSessionTargetFile } from "@/lib/visual-explainer/download-session-target";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,6 +54,7 @@ type SummaryNotesPaneProps = {
   onResummarize: () => void;
   onGenerateDiagram: () => void;
   onRediagram: () => void;
+  onImportDiagram: (html: string) => Promise<void>;
   onCopySection: (text: string) => void;
 };
 
@@ -82,12 +88,15 @@ export function SummaryNotesPane({
   onResummarize,
   onGenerateDiagram,
   onRediagram,
+  onImportDiagram,
   onCopySection,
 }: SummaryNotesPaneProps) {
   const { resolvedTheme } = useTheme();
   const [splitRatio, setSplitRatio] = useState(0.42);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [isImportingDiagram, setIsImportingDiagram] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const diagramFileInputRef = useRef<HTMLInputElement>(null);
   const dragging = useRef(false);
 
   const onMouseMove = useCallback((e: MouseEvent) => {
@@ -119,6 +128,7 @@ export function SummaryNotesPane({
   const summary = session?.summaryJson ?? null;
   const isGeneratingDiagram = session?.status === "generating_diagram";
   const hasVisualExplainer = session?.hasVisualExplainer ?? false;
+  const preferCursorDiagram = recommendCursorDiagram(session?.durationSec);
   const canGenerateDiagram =
     Boolean(summary) && geminiConfigured && !isProcessing;
 
@@ -133,21 +143,48 @@ export function SummaryNotesPane({
   };
 
   const handleCopyForExternal = async (mode: CopyPromptMode) => {
-    if (!summary) return;
+    if (!summary || !session?.id) return;
     const text = buildVisualExplainerCopyText({
-      title: session?.title?.trim() || session?.youtubeUrl || "",
+      title: session.title?.trim() || session.youtubeUrl || "",
       summary,
-      transcript: session?.transcript,
+      transcript: session.transcript,
       mode,
     });
     const ok = await copyToClipboard(text);
+    if (ok && mode === "cursor") {
+      downloadSessionTargetFile({
+        sessionId: session.id,
+        title: session.title?.trim() || session.youtubeUrl,
+      });
+    }
     setCopyFeedback(
       ok
         ? mode === "cursor"
-          ? "Cursor 用プロンプトをコピーしました"
+          ? "Cursor 用プロンプトをコピーしました。session.target.json も保存しました"
           : "NotebookLM 用テキストをコピーしました"
         : "クリップボードへのコピーに失敗しました",
     );
+  };
+
+  const handleImportDiagramFile = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setIsImportingDiagram(true);
+    try {
+      const html = await file.text();
+      await onImportDiagram(html);
+      setCopyFeedback("図解 HTML を VidNote に取り込みました");
+    } catch (err) {
+      setCopyFeedback(
+        err instanceof Error ? err.message : "図解の取り込みに失敗しました",
+      );
+    } finally {
+      setIsImportingDiagram(false);
+    }
   };
 
   return (
@@ -155,6 +192,13 @@ export function SummaryNotesPane({
       ref={containerRef}
       className="flex min-w-[300px] flex-1 flex-col border-l border-border bg-background"
     >
+      <input
+        ref={diagramFileInputRef}
+        type="file"
+        accept=".html,text/html"
+        className="hidden"
+        onChange={(event) => void handleImportDiagramFile(event)}
+      />
       <div
         className="flex min-h-0 flex-col"
         style={{ flex: `${splitRatio} 1 0%` }}
@@ -171,27 +215,17 @@ export function SummaryNotesPane({
             <RefreshCw />
             再生成
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onGenerateDiagram}
-            disabled={!canGenerateDiagram}
-          >
-            {isGeneratingDiagram ? <Loader2 className="animate-spin" /> : <ImageIcon />}
-            {isGeneratingDiagram ? "図解生成中" : "図解を生成"}
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant={preferCursorDiagram ? "default" : "ghost"}
                   size="sm"
                   disabled={!summary}
                 >
                   <ClipboardCopy />
-                  図解用にコピー
+                  Cursor 用にコピー
                 </Button>
               }
             />
@@ -280,6 +314,69 @@ export function SummaryNotesPane({
                 </Collapsible>
               ))}
 
+            {summary && !hasVisualExplainer && !isGeneratingDiagram && (
+              <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 text-sm">
+                <p className="font-medium">図解（任意）</p>
+                {preferCursorDiagram ? (
+                  <p className="text-muted-foreground">
+                    {formatLongVideoThresholdMinutes()} 分以上の動画です。VidNote
+                    内の図解はタイムアウトしやすいため、
+                    <span className="font-medium text-foreground">
+                      「Cursor 用にコピー」→ デスクトップの VidNote Diagram
+                    </span>
+                    を推奨します。
+                  </p>
+                ) : (
+                  <p className="text-muted-foreground">
+                    要点が出たら「Cursor 用にコピー」で図解を作成するか、短尺向けに
+                    VidNote 内で生成できます。
+                  </p>
+                )}
+                <ol className="flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
+                  <li>「Cursor 用にコピー」を押す（session.target.json もダウンロード）</li>
+                  <li>
+                    ダウンロードした session.target.json を diagram-workspace に置く（npm run
+                    diagram:session-target でも可）
+                  </li>
+                  <li>デスクトップの「VidNote Diagram」→ Composer に貼り付け</li>
+                  <li>output/diagram.html に保存すると DB へ自動取り込み（watch 起動時）</li>
+                </ol>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="xs"
+                    onClick={() => void handleCopyForExternal("cursor")}
+                  >
+                    <ClipboardCopy />
+                    Cursor 用にコピー
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    disabled={isImportingDiagram}
+                    onClick={() => diagramFileInputRef.current?.click()}
+                  >
+                    <Upload />
+                    {isImportingDiagram ? "取り込み中…" : "HTML を取り込む"}
+                  </Button>
+                  {!preferCursorDiagram && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      onClick={onGenerateDiagram}
+                      disabled={!canGenerateDiagram}
+                    >
+                      <ImageIcon />
+                      VidNote 内で図解を生成
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {(isGeneratingDiagram || hasVisualExplainer) && (
               <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -329,8 +426,8 @@ export function SummaryNotesPane({
                 {!hasVisualExplainer && (
                   <>
                     <p className="text-muted-foreground">
-                      自動生成に失敗した場合は「図解用にコピー」で Cursor または
-                      NotebookLM に貼り付けて図解化できます。
+                      「Cursor 用にコピー」で Cursor または NotebookLM
+                      に貼り付けて図解化できます。
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -342,16 +439,18 @@ export function SummaryNotesPane({
                         <ClipboardCopy />
                         Cursor 用にコピー
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        onClick={onRediagram}
-                        disabled={!canGenerateDiagram}
-                      >
-                        <RefreshCw />
-                        再試行
-                      </Button>
+                      {!preferCursorDiagram && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          onClick={onRediagram}
+                          disabled={!canGenerateDiagram}
+                        >
+                          <RefreshCw />
+                          VidNote 内で再試行
+                        </Button>
+                      )}
                     </div>
                   </>
                 )}

@@ -12,6 +12,7 @@ import { useTheme } from "@/components/theme-provider";
 import {
   closeVisualExplainerTab,
   navigateVisualExplainerTab,
+  openVisualExplainerInNewTab,
   prepareVisualExplainerTab,
 } from "@/lib/visual-explainer/open-tab";
 import { PaneResizer } from "@/components/workspace/PaneResizer";
@@ -132,6 +133,21 @@ export function Workspace({
   const sessionDetailsRef = useRef(sessionDetails);
   const sessionsRef = useRef(sessions);
   const listSessionsRef = useRef<Session[]>(initialSessions);
+  const pendingDiagramOpenRef = useRef(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session")?.trim();
+    if (!sessionId) return;
+
+    setSelectedSessionId(sessionId);
+    setIsNewDraft(false);
+    if (params.get("open") === "diagram") {
+      pendingDiagramOpenRef.current = true;
+    }
+
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
 
   useEffect(() => {
     sessionDetailsRef.current = sessionDetails;
@@ -371,6 +387,41 @@ export function Workspace({
   ]);
 
   useEffect(() => {
+    if (!pendingDiagramOpenRef.current || !selectedSessionId) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        if (cancelled) return;
+
+        const { res, data } = await apiFetch(
+          `/api/sessions/${selectedSessionId}`,
+        );
+        if (res.ok) {
+          const session = data.session as Session | undefined;
+          if (session?.hasVisualExplainer) {
+            pendingDiagramOpenRef.current = false;
+            setSessions((prev) =>
+              prev.map((item) =>
+                item.id === session.id ? { ...item, ...session } : item,
+              ),
+            );
+            openVisualExplainerInNewTab(selectedSessionId, resolvedTheme);
+            return;
+          }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSessionId, resolvedTheme]);
+
+  useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "n") {
         e.preventDefault();
@@ -585,6 +636,26 @@ export function Workspace({
       alert(err instanceof Error ? err.message : "図解の再生成に失敗しました");
       void refreshSession(selectedSessionId);
     }
+  };
+
+  const handleImportDiagram = async (html: string) => {
+    if (!selectedSessionId) {
+      throw new Error("セッションが選択されていません");
+    }
+
+    const { res, data } = await apiFetch(
+      `/api/sessions/${selectedSessionId}/diagram`,
+      {
+        method: "POST",
+        body: JSON.stringify({ html }),
+      },
+    );
+    if (!res.ok) {
+      throw new Error(String(data.error ?? "図解の取り込みに失敗しました"));
+    }
+
+    await refreshSession(selectedSessionId);
+    openVisualExplainerInNewTab(selectedSessionId, resolvedTheme);
   };
 
   const handleRepolish = async () => {
@@ -870,6 +941,7 @@ export function Workspace({
               onResummarize={handleResummarize}
               onGenerateDiagram={handleGenerateDiagram}
               onRediagram={handleRediagram}
+              onImportDiagram={handleImportDiagram}
               onCopySection={handleCopySection}
             />
           )}

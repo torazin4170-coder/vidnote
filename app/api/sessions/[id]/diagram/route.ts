@@ -5,6 +5,7 @@ import { getSession, getSessionDiagramHtml, updateSession } from "@/lib/db/sessi
 import { sanitizeSessionForClient } from "@/lib/session-list";
 import { applyThemeToVisualExplainerHtml } from "@/lib/visual-explainer/apply-theme";
 import { fixChartBarScales } from "@/lib/visual-explainer/fix-chart-bars";
+import type { SummarySections } from "@/lib/schema";
 import { prepareImportedDiagramHtml } from "@/lib/visual-explainer/import-diagram";
 import { optimizeDiagramHtmlForBrowser } from "@/lib/visual-explainer/optimize-html";
 import type { VisualExplainerTheme } from "@/lib/visual-explainer/theme";
@@ -19,14 +20,10 @@ function parseTheme(value: string | null): VisualExplainerTheme {
   return value === "dark" ? "dark" : "light";
 }
 
-function descriptionFromSummary(summaryJson: string | null): string | null {
-  if (!summaryJson?.trim()) return null;
-  try {
-    const parsed = JSON.parse(summaryJson) as { overview?: string };
-    return parsed.overview?.trim().slice(0, 160) ?? null;
-  } catch {
-    return null;
-  }
+function descriptionFromSummary(
+  summary: SummarySections | null,
+): string | null {
+  return summary?.overview?.trim().slice(0, 160) ?? null;
 }
 
 export async function GET(request: Request, context: RouteContext) {

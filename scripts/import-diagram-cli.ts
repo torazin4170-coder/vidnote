@@ -5,10 +5,8 @@ import { spawnSync } from "node:child_process";
 
 import { createClient } from "@libsql/client";
 
-import {
-  parseSessionTargetJson,
-  prepareImportedDiagramHtml,
-} from "@/lib/visual-explainer/import-diagram";
+import { prepareImportedDiagramHtml } from "@/lib/visual-explainer/import-diagram";
+import { parseSessionTargetJson } from "@/lib/visual-explainer/session-target";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceDir = path.join(root, "diagram-workspace");

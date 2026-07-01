@@ -1,4 +1,4 @@
-import { buildSessionTargetJson } from "@/lib/visual-explainer/import-diagram";
+import { buildSessionTargetJson } from "@/lib/visual-explainer/session-target";
 
 export function downloadSessionTargetFile(input: {
   sessionId: string;

@@ -658,6 +658,20 @@ export function Workspace({
     openVisualExplainerInNewTab(selectedSessionId, resolvedTheme);
   };
 
+  const handleRegisterCursorImport = async () => {
+    if (!selectedSessionId) {
+      throw new Error("セッションが選択されていません");
+    }
+
+    const { res, data } = await apiFetch(
+      `/api/sessions/${selectedSessionId}/diagram/import-target`,
+      { method: "POST" },
+    );
+    if (!res.ok) {
+      throw new Error(String(data.error ?? "取り込み先の登録に失敗しました"));
+    }
+  };
+
   const handleRepolish = async () => {
     if (!selectedSessionId) return;
     setPendingAction("repolish");
@@ -942,6 +956,7 @@ export function Workspace({
               onGenerateDiagram={handleGenerateDiagram}
               onRediagram={handleRediagram}
               onImportDiagram={handleImportDiagram}
+              onRegisterCursorImport={handleRegisterCursorImport}
               onCopySection={handleCopySection}
             />
           )}

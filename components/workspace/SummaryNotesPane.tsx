@@ -22,7 +22,6 @@ import {
   recommendCursorDiagram,
 } from "@/lib/visual-explainer/diagram-policy";
 import { openVisualExplainerInNewTab } from "@/lib/visual-explainer/open-tab";
-import { downloadSessionTargetFile } from "@/lib/visual-explainer/download-session-target";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,6 +54,7 @@ type SummaryNotesPaneProps = {
   onGenerateDiagram: () => void;
   onRediagram: () => void;
   onImportDiagram: (html: string) => Promise<void>;
+  onRegisterCursorImport: () => Promise<void>;
   onCopySection: (text: string) => void;
 };
 
@@ -89,6 +89,7 @@ export function SummaryNotesPane({
   onGenerateDiagram,
   onRediagram,
   onImportDiagram,
+  onRegisterCursorImport,
   onCopySection,
 }: SummaryNotesPaneProps) {
   const { resolvedTheme } = useTheme();
@@ -152,15 +153,21 @@ export function SummaryNotesPane({
     });
     const ok = await copyToClipboard(text);
     if (ok && mode === "cursor") {
-      downloadSessionTargetFile({
-        sessionId: session.id,
-        title: session.title?.trim() || session.youtubeUrl,
-      });
+      try {
+        await onRegisterCursorImport();
+      } catch (err) {
+        setCopyFeedback(
+          err instanceof Error
+            ? err.message
+            : "取り込み先の登録に失敗しました",
+        );
+        return;
+      }
     }
     setCopyFeedback(
       ok
         ? mode === "cursor"
-          ? "Cursor 用プロンプトをコピーしました。session.target.json も保存しました"
+          ? "Cursor 用プロンプトをコピーしました（取り込み先も登録済み）"
           : "NotebookLM 用テキストをコピーしました"
         : "クリップボードへのコピーに失敗しました",
     );
@@ -333,11 +340,7 @@ export function SummaryNotesPane({
                   </p>
                 )}
                 <ol className="flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
-                  <li>「Cursor 用にコピー」を押す（session.target.json もダウンロード）</li>
-                  <li>
-                    ダウンロードした session.target.json を diagram-workspace に置く（npm run
-                    diagram:session-target でも可）
-                  </li>
+                  <li>「Cursor 用にコピー」を押す（取り込み先を DB に登録）</li>
                   <li>デスクトップの「VidNote Diagram」→ Composer に貼り付け</li>
                   <li>output/diagram.html に保存すると DB へ自動取り込み（watch 起動時）</li>
                 </ol>

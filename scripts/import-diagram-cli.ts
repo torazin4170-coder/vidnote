@@ -62,33 +62,66 @@ function openBrowser(url: string): void {
   spawnSync("xdg-open", [url], { stdio: "ignore" });
 }
 
-async function main(): Promise<void> {
-  loadEnvLocal();
+const DIAGRAM_IMPORT_TARGET_KEY = "diagram_import_target";
 
-  const sessionArg = process.argv
-    .find((arg) => arg.startsWith("--session="))
-    ?.slice("--session=".length)
-    .trim();
+async function resolveSessionId(
+  db: ReturnType<typeof createClient>,
+  sessionArg: string,
+): Promise<{ sessionId: string; targetTitle: string | null }> {
+  if (sessionArg) {
+    return { sessionId: sessionArg, targetTitle: null };
+  }
 
-  let sessionId = sessionArg ?? "";
-  let targetTitle: string | null = null;
-
-  if (!sessionId) {
-    if (!fs.existsSync(sessionTargetPath)) {
-      console.error(
-        "session.target.json がありません。VidNote で「Cursor 用にコピー」を押すとダウンロードされます。",
-      );
-      console.error(`配置先: ${sessionTargetPath}`);
-      console.error("または: npm run diagram:import -- --session=SESSION_ID");
-      process.exit(1);
+  const settingResult = await db.execute({
+    sql: "SELECT value FROM app_settings WHERE key = ?",
+    args: [DIAGRAM_IMPORT_TARGET_KEY],
+  });
+  const settingRow = settingResult.rows[0] as
+    | { value?: string }
+    | undefined;
+  if (settingRow?.value) {
+    try {
+      const parsed = JSON.parse(String(settingRow.value)) as {
+        sessionId?: string;
+        title?: string | null;
+      };
+      const sessionId = parsed.sessionId?.trim();
+      if (sessionId) {
+        return {
+          sessionId,
+          targetTitle: parsed.title?.trim() ?? null,
+        };
+      }
+    } catch {
+      // fall through to legacy file
     }
+  }
 
+  if (fs.existsSync(sessionTargetPath)) {
     const target = parseSessionTargetJson(
       fs.readFileSync(sessionTargetPath, "utf8"),
     );
-    sessionId = target.sessionId;
-    targetTitle = target.title?.trim() ?? null;
+    return {
+      sessionId: target.sessionId,
+      targetTitle: target.title?.trim() ?? null,
+    };
   }
+
+  console.error(
+    "取り込み先セッションが未登録です。VidNote で「Cursor 用にコピー」を押してください。",
+  );
+  console.error("または: npm run diagram:import -- --session=SESSION_ID");
+  process.exit(1);
+}
+
+async function main(): Promise<void> {
+  loadEnvLocal();
+
+  const sessionArg =
+    process.argv
+      .find((arg) => arg.startsWith("--session="))
+      ?.slice("--session=".length)
+      .trim() ?? "";
 
   if (!fs.existsSync(diagramPath)) {
     console.error(`diagram.html がありません: ${diagramPath}`);
@@ -102,6 +135,8 @@ async function main(): Promise<void> {
     url,
     authToken: url.startsWith("file:") ? undefined : authToken,
   });
+
+  const { sessionId, targetTitle } = await resolveSessionId(db, sessionArg);
 
   const sessionResult = await db.execute({
     sql: `SELECT title, youtube_url, summary_json FROM sessions WHERE id = ?`,

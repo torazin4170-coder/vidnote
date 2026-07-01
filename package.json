@@ -16,8 +16,7 @@
     "diagram:open": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-vidnote-diagram.ps1",
     "diagram:shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-vidnote-diagram-shortcut.ps1",
     "diagram:import": "npx --yes tsx scripts/import-diagram-cli.ts",
-    "diagram:watch": "node scripts/watch-diagram.mjs",
-    "diagram:session-target": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/copy-session-target.ps1"
+    "diagram:watch": "node scripts/watch-diagram.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

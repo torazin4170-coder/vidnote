@@ -274,13 +274,28 @@ export function SessionLibraryPane({
 
           <ScrollArea className="min-h-0 flex-1">
             {visibleSessions.length === 0 ? (
-              <p className="px-3 py-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-                {searchQuery.trim()
-                  ? "検索結果はありません"
-                  : categoryFilter !== "all"
-                    ? "このカテゴリーに動画はありません"
-                    : "履歴はありません"}
-              </p>
+              <div className="space-y-2 px-3 py-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+                <p>
+                  {searchQuery.trim()
+                    ? "検索結果はありません"
+                    : categoryFilter !== "all"
+                      ? "このカテゴリーに動画はありません"
+                      : sessions.length === 0
+                        ? "履歴はありません"
+                        : "表示できる履歴がありません"}
+                </p>
+                {!searchQuery.trim() &&
+                  categoryFilter === "all" &&
+                  sessions.length === 0 && (
+                    <p>
+                      ローカル開発中は{" "}
+                      <span className="font-medium text-foreground">
+                        http://localhost:3000
+                      </span>{" "}
+                      を開いてください。Vercel 本番とデータベースが異なる場合、履歴が表示されないことがあります。
+                    </p>
+                  )}
+              </div>
             ) : (
               [...groups.entries()].map(([label, items]) => (
                 <SidebarGroup key={label}>

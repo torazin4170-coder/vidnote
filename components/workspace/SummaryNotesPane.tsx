@@ -54,7 +54,6 @@ type SummaryNotesPaneProps = {
   onGenerateDiagram: () => void;
   onRediagram: () => void;
   onImportDiagram: (html: string) => Promise<void>;
-  onRegisterCursorImport: () => Promise<void>;
   onCopySection: (text: string) => void;
 };
 
@@ -89,7 +88,6 @@ export function SummaryNotesPane({
   onGenerateDiagram,
   onRediagram,
   onImportDiagram,
-  onRegisterCursorImport,
   onCopySection,
 }: SummaryNotesPaneProps) {
   const { resolvedTheme } = useTheme();
@@ -152,22 +150,10 @@ export function SummaryNotesPane({
       mode,
     });
     const ok = await copyToClipboard(text);
-    if (ok && mode === "cursor") {
-      try {
-        await onRegisterCursorImport();
-      } catch (err) {
-        setCopyFeedback(
-          err instanceof Error
-            ? err.message
-            : "取り込み先の登録に失敗しました",
-        );
-        return;
-      }
-    }
     setCopyFeedback(
       ok
         ? mode === "cursor"
-          ? "Cursor 用プロンプトをコピーしました（取り込み先も登録済み）"
+          ? "Cursor 用プロンプトをコピーしました"
           : "NotebookLM 用テキストをコピーしました"
         : "クリップボードへのコピーに失敗しました",
     );
@@ -184,7 +170,9 @@ export function SummaryNotesPane({
     try {
       const html = await file.text();
       await onImportDiagram(html);
-      setCopyFeedback("図解 HTML を VidNote に取り込みました");
+      setCopyFeedback(
+        "図解 HTML を VidNote に取り込みました。下の「AI 図解」から「新しいタブで開く」を押してください。",
+      );
     } catch (err) {
       setCopyFeedback(
         err instanceof Error ? err.message : "図解の取り込みに失敗しました",
@@ -340,9 +328,10 @@ export function SummaryNotesPane({
                   </p>
                 )}
                 <ol className="flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
-                  <li>「Cursor 用にコピー」を押す（取り込み先を DB に登録）</li>
+                  <li>「Cursor 用にコピー」を押す</li>
                   <li>デスクトップの「VidNote Diagram」→ Composer に貼り付け</li>
-                  <li>output/diagram.html に保存すると DB へ自動取り込み（watch 起動時）</li>
+                  <li>output/diagram.html に保存 → npm run diagram:preview で確認</li>
+                  <li>VidNote の「HTML を取り込む」から diagram.html を選ぶ（preview.html でも可）</li>
                 </ol>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -388,12 +377,24 @@ export function SummaryNotesPane({
                     {hasVisualExplainer && !isGeneratingDiagram && (
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="default"
                         size="xs"
                         onClick={handleOpenDiagramTab}
                       >
                         <ExternalLink />
                         新しいタブで開く
+                      </Button>
+                    )}
+                    {hasVisualExplainer && !isGeneratingDiagram && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        disabled={isImportingDiagram}
+                        onClick={() => diagramFileInputRef.current?.click()}
+                      >
+                        <Upload />
+                        {isImportingDiagram ? "取り込み中…" : "HTML を再取り込み"}
                       </Button>
                     )}
                     <Button

@@ -3,81 +3,51 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Search, X } from "lucide-react";
 
+import { RichTextEditor } from "@/components/editor/RichTextEditor";
 import type { Session } from "@/lib/schema";
+import {
+  stripTranscriptFormatting,
+  transcriptToEditorHtml,
+} from "@/lib/rich-text/transcript-content";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type TranscriptPaneProps = {
   session: Session | null;
   isProcessing: boolean;
   width?: number;
+  onChange?: (html: string) => void;
 };
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function highlightText(text: string, query: string) {
-  if (!query.trim()) return text;
-  const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, "gi"));
-  return parts.map((part, i) =>
-    part.toLowerCase() === query.toLowerCase() ? (
-      <mark key={i} className="rounded-sm bg-accent px-0.5">
-        {part}
-      </mark>
-    ) : (
-      part
-    ),
-  );
-}
-
-/** Legacy timestamp lines are normalized for display. */
-function normalizeTranscript(raw: string): string {
-  const lines = raw.split("\n");
-  const paragraphs: string[] = [];
-  let current = "";
-
-  const stripTimestamp = (line: string) =>
-    line.replace(/^\d{1,2}:\d{2}(:\d{2})?\s*/, "").trim();
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      if (current) {
-        paragraphs.push(current.trim());
-        current = "";
-      }
-      continue;
-    }
-    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) {
-      continue;
-    }
-    const text = stripTimestamp(trimmed);
-    if (!text) continue;
-    current += current ? ` ${text}` : text;
-  }
-
-  if (current) paragraphs.push(current.trim());
-  return paragraphs.join("\n\n");
-}
 
 export function TranscriptPane({
   session,
   isProcessing,
   width,
+  onChange,
 }: TranscriptPaneProps) {
   const [query, setQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const displayText = useMemo(() => {
-    if (!session?.transcript?.trim()) return "";
-    return normalizeTranscript(session.transcript);
-  }, [session?.transcript]);
+  const editorContent = useMemo(
+    () => transcriptToEditorHtml(session?.transcript),
+    [session?.transcript],
+  );
 
-  const charCount = displayText.length;
+  const plainText = useMemo(
+    () => stripTranscriptFormatting(session?.transcript ?? ""),
+    [session?.transcript],
+  );
+
+  const matchCount = useMemo(() => {
+    const q = query.trim();
+    if (!q || !plainText) return 0;
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    return [...plainText.matchAll(re)].length;
+  }, [plainText, query]);
+
+  const charCount = plainText.length;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -86,22 +56,15 @@ export function TranscriptPane({
         setShowSearch(true);
         requestAnimationFrame(() => searchRef.current?.focus());
       }
-      if (e.ctrlKey && e.shiftKey && e.key === "C" && displayText) {
-        void navigator.clipboard.writeText(displayText);
+      if (e.ctrlKey && e.shiftKey && e.key === "C" && plainText) {
+        void navigator.clipboard.writeText(plainText);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [displayText]);
+  }, [plainText]);
 
-  const paragraphs = useMemo(() => {
-    if (!displayText) return [];
-    const parts = displayText.split("\n\n").filter(Boolean);
-    if (parts.length > 150) {
-      return [displayText];
-    }
-    return parts;
-  }, [displayText]);
+  const canEdit = Boolean(session?.transcript?.trim()) && Boolean(onChange);
 
   return (
     <div
@@ -126,6 +89,11 @@ export function TranscriptPane({
                 className="h-7 w-40 bg-card"
                 aria-label="字幕内検索"
               />
+              {query.trim() && (
+                <span className="text-xs text-muted-foreground">
+                  {matchCount} 件
+                </span>
+              )}
               <Button
                 type="button"
                 variant="ghost"
@@ -154,9 +122,9 @@ export function TranscriptPane({
             type="button"
             variant="ghost"
             size="icon-sm"
-            disabled={!displayText}
+            disabled={!plainText}
             onClick={() => {
-              if (displayText) void navigator.clipboard.writeText(displayText);
+              if (plainText) void navigator.clipboard.writeText(plainText);
             }}
             aria-label="全文コピー"
           >
@@ -165,40 +133,39 @@ export function TranscriptPane({
         </div>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="w-full min-w-0 p-4">
-          {!session && (
-            <p className="text-sm text-muted-foreground">
-              左のサイドバーから「新規動画」を追加するか、セッションを選択してください。
-            </p>
-          )}
+      <div className="min-h-0 flex-1 overflow-auto p-4">
+        {!session && (
+          <p className="text-sm text-muted-foreground">
+            左のサイドバーから「新規動画」を追加するか、セッションを選択してください。
+          </p>
+        )}
 
-          {session && isProcessing && !session.transcript && (
-            <div className="flex flex-col gap-2">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-4 w-full" />
-              ))}
-            </div>
-          )}
-
-          {session && !session.transcript && !isProcessing && (
-            <p className="text-sm text-muted-foreground">
-              字幕が未取得です。「処理を開始」または「字幕を再取得」を実行してください。
-            </p>
-          )}
-
-          <div className="flex w-full min-w-0 flex-col gap-4">
-            {paragraphs.map((paragraph, index) => (
-              <p
-                key={index}
-                className="w-full text-sm leading-relaxed break-words"
-              >
-                {highlightText(paragraph, query)}
-              </p>
+        {session && isProcessing && !session.transcript && (
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-4 w-full" />
             ))}
           </div>
-        </div>
-      </ScrollArea>
+        )}
+
+        {session && !session.transcript && !isProcessing && (
+          <p className="text-sm text-muted-foreground">
+            字幕が未取得です。「処理を開始」または「字幕を再取得」を実行してください。
+          </p>
+        )}
+
+        {canEdit && (
+          <RichTextEditor
+            key={session!.id}
+            initialContent={editorContent}
+            onChange={onChange!}
+            showFixedToolbar={false}
+            showHistory={false}
+            minHeightClassName="min-h-[320px]"
+            editorClassName="border-0 bg-transparent px-0 py-0"
+          />
+        )}
+      </div>
     </div>
   );
 }

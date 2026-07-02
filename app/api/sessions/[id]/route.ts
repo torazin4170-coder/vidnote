@@ -8,6 +8,7 @@ import {
   updateSession,
 } from "@/lib/db/sessions";
 import { sanitizeSessionForClient } from "@/lib/session-list";
+import { stripTranscriptFormatting } from "@/lib/rich-text/transcript-content";
 
 const patchSchema = z.object({
   notesHtml: z.string().optional(),
@@ -38,9 +39,16 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   try {
     const body = patchSchema.parse(await request.json());
+    const nextTranscript =
+      body.transcript !== undefined ? body.transcript : existing.transcript;
+    const transcriptTextChanged =
+      body.transcript !== undefined &&
+      stripTranscriptFormatting(existing.transcript ?? "") !==
+        stripTranscriptFormatting(nextTranscript ?? "");
+
     const session = await updateSession(id, {
       notesHtml: body.notesHtml ?? existing.notesHtml,
-      transcript: body.transcript ?? existing.transcript,
+      transcript: nextTranscript,
       title: body.title !== undefined ? body.title : existing.title,
       thumbnailUrl:
         body.thumbnailUrl !== undefined
@@ -49,7 +57,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       ...(body.categoryId !== undefined
         ? { categoryId: body.categoryId }
         : {}),
-      ...(body.transcript || body.resetForReprocess
+      ...(body.resetForReprocess || transcriptTextChanged
         ? {
             status: "transcribed",
             summaryJson: null,

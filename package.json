@@ -15,8 +15,8 @@
     "relay": "node scripts/transcript-relay.mjs",
     "diagram:open": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-vidnote-diagram.ps1",
     "diagram:shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-vidnote-diagram-shortcut.ps1",
-    "diagram:import": "npx --yes tsx scripts/import-diagram-cli.ts",
-    "diagram:watch": "node scripts/watch-diagram.mjs"
+    "diagram:preview": "npx --yes tsx scripts/preview-diagram-cli.ts",
+    "diagram:finish": "npm run diagram:preview"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -51,6 +51,7 @@
     "eslint-config-next": "^16.2.6",
     "prettier": "^3.8.3",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

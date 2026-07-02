@@ -17,6 +17,8 @@ import {
   GeminiDailyQuotaExceededError,
   getGeminiRateLimitStatus,
 } from "@/lib/ai/gemini-rate-limit";
+import { appendSummarySectionsToNotes } from "@/lib/notes/append-summary-sections";
+import { stripTranscriptFormatting } from "@/lib/rich-text/transcript-content";
 import { fetchTranscriptServer } from "@/lib/youtube/transcript-server";
 import { extractYoutubeId, youtubeWatchUrl } from "@/lib/youtube/parse-url";
 
@@ -140,10 +142,18 @@ async function processSession(sessionId: string): Promise<void> {
 
     await updateSession(sessionId, { status: "summarizing", errorMessage: null });
 
-    const summary = await summarizeTranscript(transcript, { sessionId });
+    const summary = await summarizeTranscript(
+      stripTranscriptFormatting(transcript),
+      { sessionId },
+    );
 
+    const notesSource = await getSession(sessionId);
     await updateSession(sessionId, {
       summaryJson: JSON.stringify(summary),
+      notesHtml: appendSummarySectionsToNotes(
+        notesSource?.notesHtml,
+        summary,
+      ),
       status: "done",
       errorMessage: null,
     });
@@ -176,11 +186,13 @@ export async function summarizeSession(sessionId: string): Promise<void> {
   await updateSession(sessionId, { status: "summarizing", errorMessage: null });
 
   try {
-    const summary = await summarizeTranscript(session.transcript, {
-      sessionId,
-    });
+    const summary = await summarizeTranscript(
+      stripTranscriptFormatting(session.transcript),
+      { sessionId },
+    );
     await updateSession(sessionId, {
       summaryJson: JSON.stringify(summary),
+      notesHtml: appendSummarySectionsToNotes(session.notesHtml, summary),
       status: "done",
       errorMessage: null,
     });

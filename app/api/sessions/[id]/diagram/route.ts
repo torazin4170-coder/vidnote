@@ -12,6 +12,8 @@ import type { VisualExplainerTheme } from "@/lib/visual-explainer/theme";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+export const maxDuration = 60;
+
 const importSchema = z.object({
   html: z.string().min(1),
 });
@@ -67,14 +69,18 @@ export async function POST(request: Request, context: RouteContext) {
       description: descriptionFromSummary(session.summaryJson),
     });
 
-    const updated = await updateSession(id, {
-      visualExplainerHtml: html,
-      status: "done",
-      errorMessage: null,
-    });
+    const meta = await updateSession(
+      id,
+      {
+        visualExplainerHtml: html,
+        status: "done",
+        errorMessage: null,
+      },
+      { returnMode: "meta" },
+    );
 
     return NextResponse.json({
-      session: updated ? sanitizeSessionForClient(updated) : null,
+      session: meta ? sanitizeSessionForClient(meta) : null,
     });
   } catch (err) {
     const message =

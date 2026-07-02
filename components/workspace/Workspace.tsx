@@ -84,7 +84,10 @@ async function apiFetch(
         ...init?.headers,
       },
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw err;
+    }
     throw new Error(
       "サーバーとの通信に失敗しました。ページを再読み込み（Ctrl+Shift+R）してから再試行してください。",
     );
@@ -98,6 +101,22 @@ async function apiFetch(
   }
 
   return { res, data };
+}
+
+const DIAGRAM_IMPORT_TIMEOUT_MS = 45_000;
+
+async function apiFetchWithTimeout(
+  input: string,
+  init: RequestInit | undefined,
+  timeoutMs: number,
+): Promise<{ res: Response; data: Record<string, unknown> }> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await apiFetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export function Workspace({
@@ -318,6 +337,10 @@ export function Workspace({
     },
     [bodiesLoadedIds, refreshSessionMeta, reloadSessionBodies],
   );
+
+  useEffect(() => {
+    void refreshSessions();
+  }, [refreshSessions]);
 
   useEffect(() => {
     const q = searchQuery.trim();
@@ -643,33 +666,52 @@ export function Workspace({
       throw new Error("セッションが選択されていません");
     }
 
-    const { res, data } = await apiFetch(
-      `/api/sessions/${selectedSessionId}/diagram`,
-      {
-        method: "POST",
-        body: JSON.stringify({ html }),
-      },
-    );
+    let res: Response;
+    let data: Record<string, unknown>;
+    try {
+      ({ res, data } = await apiFetchWithTimeout(
+        `/api/sessions/${selectedSessionId}/diagram`,
+        {
+          method: "POST",
+          body: JSON.stringify({ html }),
+        },
+        DIAGRAM_IMPORT_TIMEOUT_MS,
+      ));
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error(
+          "取り込みがタイムアウトしました。ページを再読み込みしてから再試行してください。",
+        );
+      }
+      throw err;
+    }
+
     if (!res.ok) {
       throw new Error(String(data.error ?? "図解の取り込みに失敗しました"));
     }
 
-    await refreshSession(selectedSessionId);
-    openVisualExplainerInNewTab(selectedSessionId, resolvedTheme);
-  };
-
-  const handleRegisterCursorImport = async () => {
-    if (!selectedSessionId) {
-      throw new Error("セッションが選択されていません");
+    const imported = data.session as Session | undefined;
+    if (imported) {
+      setSessionDetails((prev) => ({
+        ...prev,
+        [selectedSessionId]: preserveSessionBodies(
+          prev[selectedSessionId],
+          imported,
+        ),
+      }));
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === selectedSessionId
+            ? { ...s, ...toSessionListPatch(imported) }
+            : s,
+        ),
+      );
     }
 
-    const { res, data } = await apiFetch(
-      `/api/sessions/${selectedSessionId}/diagram/import-target`,
-      { method: "POST" },
-    );
-    if (!res.ok) {
-      throw new Error(String(data.error ?? "取り込み先の登録に失敗しました"));
-    }
+    void refreshSession(selectedSessionId);
+    window.setTimeout(() => {
+      openVisualExplainerInNewTab(selectedSessionId, resolvedTheme);
+    }, 0);
   };
 
   const handleRepolish = async () => {
@@ -692,6 +734,39 @@ export function Workspace({
       setPendingAction(null);
       setIsCreating(false);
     }
+  };
+
+  const handleTranscriptChange = async (html: string) => {
+    if (!selectedSessionId) return;
+    if (html === (selectedSession?.transcript ?? "")) return;
+    const res = await fetch(`/api/sessions/${selectedSessionId}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcript: html }),
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { session: Session };
+    setSessionDetails((prev) => ({
+      ...prev,
+      [selectedSessionId]: {
+        ...(prev[selectedSessionId] ?? selectedSummary ?? data.session),
+        ...data.session,
+      },
+    }));
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === selectedSessionId
+          ? {
+              ...s,
+              transcript: data.session.transcript,
+              status: data.session.status,
+              summaryJson: data.session.summaryJson,
+              updatedAt: data.session.updatedAt,
+            }
+          : s,
+      ),
+    );
   };
 
   const handleNotesChange = async (html: string) => {
@@ -932,6 +1007,7 @@ export function Workspace({
                 session={selectedSession}
                 isProcessing={processing || isLoadingDetail}
                 width={transcriptWidth}
+                onChange={handleTranscriptChange}
               />
               {showPane4 && (
                 <PaneResizer
@@ -956,7 +1032,6 @@ export function Workspace({
               onGenerateDiagram={handleGenerateDiagram}
               onRediagram={handleRediagram}
               onImportDiagram={handleImportDiagram}
-              onRegisterCursorImport={handleRegisterCursorImport}
               onCopySection={handleCopySection}
             />
           )}

@@ -17,6 +17,9 @@ const BAR_CLASS_PATTERN =
 const ROW_OPEN_PATTERN =
   /<div class="[^"]*\bflex\b[^"]*\bitems-center\b[^"]*\bgap-3\b[^"]*"[^>]*>/i;
 
+const ROW_OPEN_AT_START_PATTERN =
+  /^<div class="[^"]*\bflex\b[^"]*\bitems-center\b[^"]*\bgap-3\b[^"]*"[^>]*>/i;
+
 const FILL_PATTERN =
   /<div class="([^"]*\bbar-w-(?:10|20|25|33|40|50|66|75|85|full)\b[^"]*)"[^>]*>\s*<\/div>/i;
 
@@ -60,7 +63,7 @@ function findBalancedDiv(
   html: string,
   start: number,
 ): { block: string; end: number } | null {
-  if (!ROW_OPEN_PATTERN.test(html.slice(start))) return null;
+  if (!ROW_OPEN_AT_START_PATTERN.test(html.slice(start))) return null;
 
   let depth = 0;
   let i = start;
@@ -159,14 +162,14 @@ export function fixChartBarScales(html: string): string {
   };
 
   while (scanAt < html.length) {
-    ROW_OPEN_PATTERN.lastIndex = scanAt;
-    const openMatch = ROW_OPEN_PATTERN.exec(html);
-    if (!openMatch) break;
+    const relativeIndex = html.slice(scanAt).search(ROW_OPEN_PATTERN);
+    if (relativeIndex === -1) break;
 
-    const rowStart = openMatch.index;
+    const rowStart = scanAt + relativeIndex;
+    const openLength = html.slice(rowStart).match(ROW_OPEN_PATTERN)?.[0]?.length ?? 0;
     const balanced = findBalancedDiv(html, rowStart);
     if (!balanced) {
-      scanAt = rowStart + 1;
+      scanAt = rowStart + Math.max(openLength, 1);
       flush();
       continue;
     }

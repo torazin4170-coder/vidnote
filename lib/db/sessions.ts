@@ -221,6 +221,7 @@ export async function updateSession(
     notesHtml: string | null;
     errorMessage: string | null;
   }>,
+  options?: { returnMode?: "full" | "meta" },
 ): Promise<Session | null> {
   const fields: string[] = [];
   const values: SqlValue[] = [];
@@ -246,7 +247,9 @@ export async function updateSession(
     }
   }
 
-  if (fields.length === 0) return getSession(id);
+  if (fields.length === 0) {
+    return options?.returnMode === "meta" ? getSessionMeta(id) : getSession(id);
+  }
 
   fields.push("updated_at = ?");
   values.push(new Date().toISOString());
@@ -258,7 +261,7 @@ export async function updateSession(
     args: values,
   });
 
-  return getSession(id);
+  return options?.returnMode === "meta" ? getSessionMeta(id) : getSession(id);
 }
 
 export async function deleteSession(id: string): Promise<boolean> {

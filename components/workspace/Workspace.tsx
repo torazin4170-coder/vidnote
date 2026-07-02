@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { Category, CategoryFilter, FocusMode, Session, SessionStatus } from "@/lib/schema";
 import { isProcessingStatus } from "@/lib/labels";
+import { loadPaneLayout, savePaneLayout } from "@/lib/pane-layout";
 import { toSessionListPatch } from "@/lib/session-list";
 import { normalizeYoutubeUrl, youtubeWatchUrl } from "@/lib/youtube/parse-url";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -153,6 +154,37 @@ export function Workspace({
   const sessionsRef = useRef(sessions);
   const listSessionsRef = useRef<Session[]>(initialSessions);
   const pendingDiagramOpenRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const layout = loadPaneLayout();
+    setLibraryWidth(layout.libraryWidth);
+    setSourceWidth(layout.sourceWidth);
+    setTranscriptWidth(layout.transcriptWidth);
+  }, []);
+
+  const resizeLibraryWidth = useCallback((delta: number) => {
+    setLibraryWidth((width) => {
+      const next = clampWidth(width + delta, 200, 480);
+      savePaneLayout({ libraryWidth: next });
+      return next;
+    });
+  }, []);
+
+  const resizeSourceWidth = useCallback((delta: number) => {
+    setSourceWidth((width) => {
+      const next = clampWidth(width + delta, 220, 480);
+      savePaneLayout({ sourceWidth: next });
+      return next;
+    });
+  }, []);
+
+  const resizeTranscriptWidth = useCallback((delta: number) => {
+    setTranscriptWidth((width) => {
+      const next = clampWidth(width + delta, 280, 900);
+      savePaneLayout({ transcriptWidth: next });
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -947,11 +979,7 @@ export function Workspace({
         onDeleteCategory={handleDeleteCategory}
       />
 
-      <PaneResizer
-        onResize={(delta) =>
-          setLibraryWidth((width) => clampWidth(width + delta, 200, 480))
-        }
-      />
+      <PaneResizer onResize={resizeLibraryWidth} />
 
       <SidebarInset className="flex min-w-0 flex-col bg-background">
         <GlobalHeader
@@ -978,13 +1006,7 @@ export function Workspace({
                 geminiConfigured={geminiConfigured}
               />
               {(showPane3 || showPane4) && (
-                <PaneResizer
-                  onResize={(delta) =>
-                    setSourceWidth((width) =>
-                      clampWidth(width + delta, 220, 480),
-                    )
-                  }
-                />
+                <PaneResizer onResize={resizeSourceWidth} />
               )}
             </>
           )}
@@ -997,15 +1019,7 @@ export function Workspace({
                 width={transcriptWidth}
                 onChange={handleTranscriptChange}
               />
-              {showPane4 && (
-                <PaneResizer
-                  onResize={(delta) =>
-                    setTranscriptWidth((width) =>
-                      clampWidth(width + delta, 280, 900),
-                    )
-                  }
-                />
-              )}
+              {showPane4 && <PaneResizer onResize={resizeTranscriptWidth} />}
             </>
           )}
 

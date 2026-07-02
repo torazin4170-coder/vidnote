@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ClipboardCopy,
@@ -13,6 +13,7 @@ import {
 
 import type { Session, SummarySections } from "@/lib/schema";
 import { SUMMARY_SECTION_LABELS } from "@/lib/labels";
+import { loadPaneLayout, savePaneLayout } from "@/lib/pane-layout";
 import {
   buildVisualExplainerCopyText,
   type CopyPromptMode,
@@ -97,6 +98,15 @@ export function SummaryNotesPane({
   const containerRef = useRef<HTMLDivElement>(null);
   const diagramFileInputRef = useRef<HTMLInputElement>(null);
   const dragging = useRef(false);
+  const splitRatioRef = useRef(splitRatio);
+
+  useLayoutEffect(() => {
+    setSplitRatio(loadPaneLayout().summaryNotesSplitRatio);
+  }, []);
+
+  useEffect(() => {
+    splitRatioRef.current = splitRatio;
+  }, [splitRatio]);
 
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragging.current || !containerRef.current) return;
@@ -107,6 +117,7 @@ export function SummaryNotesPane({
 
   const onMouseUp = useCallback(() => {
     dragging.current = false;
+    savePaneLayout({ summaryNotesSplitRatio: splitRatioRef.current });
   }, []);
 
   useEffect(() => {

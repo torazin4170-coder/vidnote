@@ -9,11 +9,13 @@ type NoteEditorProps = {
 
 export function NoteEditor({ initialContent, onChange }: NoteEditorProps) {
   return (
-    <RichTextEditor
-      initialContent={initialContent}
-      onChange={onChange}
-      showFixedToolbar
-      showHistory
-    />
+    <div className="h-full min-h-0">
+      <RichTextEditor
+        initialContent={initialContent}
+        onChange={onChange}
+        showFixedToolbar
+        showHistory
+      />
+    </div>
   );
 }

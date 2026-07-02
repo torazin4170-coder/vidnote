@@ -105,7 +105,7 @@ export function RichTextEditor({
   if (!editor) return null;
 
   return (
-    <div className="flex h-full flex-col gap-2">
+    <div className="flex h-full min-h-0 flex-col gap-2">
       {showFixedToolbar && (
         <EditorFormatToolbar editor={editor} showHistory={showHistory} />
       )}
@@ -118,7 +118,9 @@ export function RichTextEditor({
           <EditorFormatToolbar editor={editor} showHistory={false} />
         </BubbleMenu>
       )}
-      <EditorContent editor={editor} className="min-h-0 flex-1" />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 }

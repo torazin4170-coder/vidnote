@@ -633,7 +633,6 @@ export function Workspace({
 
   const handleRediagram = async () => {
     if (!selectedSessionId || !selectedSession?.summaryJson) return;
-    const previewTab = prepareVisualExplainerTab();
     applyOptimisticStatus(selectedSessionId, "generating_diagram");
     try {
       const { res, data } = await apiFetch(
@@ -643,19 +642,8 @@ export function Workspace({
       if (!res.ok) {
         throw new Error(String(data.error ?? "図解の再生成に失敗しました"));
       }
-      const updated = data.session as Session | undefined;
       await refreshSession(selectedSessionId);
-      if (updated?.hasVisualExplainer) {
-        navigateVisualExplainerTab(
-          previewTab,
-          selectedSessionId,
-          resolvedTheme,
-        );
-      } else {
-        closeVisualExplainerTab(previewTab);
-      }
     } catch (err) {
-      closeVisualExplainerTab(previewTab);
       alert(err instanceof Error ? err.message : "図解の再生成に失敗しました");
       void refreshSession(selectedSessionId);
     }

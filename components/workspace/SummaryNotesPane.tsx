@@ -185,7 +185,7 @@ export function SummaryNotesPane({
   return (
     <div
       ref={containerRef}
-      className="flex min-w-[300px] flex-1 flex-col border-l border-border bg-background"
+      className="flex min-h-0 min-w-[300px] flex-1 flex-col border-l border-border bg-background"
     >
       <input
         ref={diagramFileInputRef}
@@ -492,7 +492,7 @@ export function SummaryNotesPane({
         <div className="flex h-10 shrink-0 items-center border-b border-border px-3">
           <h2 className="text-sm font-medium">マイノート</h2>
         </div>
-        <div className="min-h-0 flex-1 p-3">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
           {!session ? (
             <p className="text-sm text-muted-foreground">
               左の一覧からセッションを選択してください。
@@ -500,11 +500,13 @@ export function SummaryNotesPane({
           ) : !bodiesReady ? (
             <Skeleton className="h-[200px] w-full" />
           ) : (
-            <NoteEditor
-              key={session.id}
-              initialContent={session.notesHtml ?? ""}
-              onChange={onNotesChange}
-            />
+            <div className="min-h-0 flex-1">
+              <NoteEditor
+                key={session.id}
+                initialContent={session.notesHtml ?? ""}
+                onChange={onNotesChange}
+              />
+            </div>
           )}
         </div>
       </div>

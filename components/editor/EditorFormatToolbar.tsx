@@ -39,12 +39,29 @@ export function EditorFormatToolbar({
       </Button>
       <Button
         type="button"
-        variant="ghost"
+        variant={
+          editor.isActive("textStyle", { color: "#dc2626" }) ? "secondary" : "ghost"
+        }
         size="icon-sm"
-        onClick={() => editor.chain().focus().setColor("#dc2626").run()}
+        onClick={() => {
+          if (editor.isActive("textStyle", { color: "#dc2626" })) {
+            editor.chain().focus().unsetColor().run();
+          } else {
+            editor.chain().focus().setColor("#dc2626").run();
+          }
+        }}
         aria-label="赤字"
       >
         <span className="text-destructive">A</span>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => editor.chain().focus().unsetColor().run()}
+        aria-label="元の色に戻す"
+      >
+        <span className="text-foreground">A</span>
       </Button>
       <Button
         type="button"

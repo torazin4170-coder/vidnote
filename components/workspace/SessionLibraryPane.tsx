@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import {
+  ChevronDown,
+  ChevronRight,
   FolderOpen,
   MoreHorizontal,
   Plus,
@@ -18,6 +20,7 @@ import type { Category, CategoryFilter, Session } from "@/lib/schema";
 import { sessionStatusIcons } from "@/lib/labels";
 import { sessionMatchesCategoryFilter } from "@/lib/session-filter";
 import { youtubeThumbnailUrl } from "@/lib/youtube/parse-url";
+import { cn } from "@/lib/utils";
 import { CategoryManageDialog } from "@/components/workspace/CategoryManageDialog";
 import { DeleteConfirmDialog } from "@/components/workspace/DeleteConfirmDialog";
 import { Pane1Toggle } from "@/components/workspace/Pane1Toggle";
@@ -48,6 +51,8 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useSidebar } from "@/components/ui/sidebar";
 
 type SessionLibraryPaneProps = {
   sessions: Session[];
@@ -78,15 +83,27 @@ function groupLabel(dateStr: string): string {
   return format(date, "M月d日", { locale: ja });
 }
 
-function groupSessions(sessions: Session[]): Map<string, Session[]> {
+type DateGroup = {
+  dateKey: string;
+  label: string;
+  sessions: Session[];
+};
+
+function buildDateGroups(sessions: Session[]): DateGroup[] {
   const map = new Map<string, Session[]>();
   for (const session of sessions) {
-    const label = groupLabel(session.updatedAt);
-    const list = map.get(label) ?? [];
+    const dateKey = format(parseISO(session.updatedAt), "yyyy-MM-dd");
+    const list = map.get(dateKey) ?? [];
     list.push(session);
-    map.set(label, list);
+    map.set(dateKey, list);
   }
-  return map;
+  return [...map.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([dateKey, items]) => ({
+      dateKey,
+      label: groupLabel(items[0]!.updatedAt),
+      sessions: items,
+    }));
 }
 
 export function SessionLibraryPane({
@@ -107,9 +124,12 @@ export function SessionLibraryPane({
   onUpdateCategory,
   onDeleteCategory,
 }: SessionLibraryPaneProps) {
+  const isMobile = useIsMobile();
+  const { setOpenMobile } = useSidebar();
   const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [categoryManageOpen, setCategoryManageOpen] = useState(false);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(() => new Set());
 
   const visibleSessions = useMemo(
     () =>
@@ -120,9 +140,42 @@ export function SessionLibraryPane({
   );
 
   const groups = useMemo(
-    () => groupSessions(visibleSessions),
+    () => buildDateGroups(visibleSessions),
     [visibleSessions],
   );
+
+  const selectedDateKey = useMemo(() => {
+    if (!selectedSessionId) return null;
+    const session = visibleSessions.find((s) => s.id === selectedSessionId);
+    if (!session) return null;
+    return format(parseISO(session.updatedAt), "yyyy-MM-dd");
+  }, [selectedSessionId, visibleSessions]);
+
+  useEffect(() => {
+    setExpandedDates((prev) => {
+      const next = new Set(prev);
+      if (selectedDateKey) next.add(selectedDateKey);
+      const todayKey = format(new Date(), "yyyy-MM-dd");
+      if (groups.some((group) => group.dateKey === todayKey)) {
+        next.add(todayKey);
+      }
+      return next;
+    });
+  }, [selectedDateKey, groups]);
+
+  const toggleDateGroup = (group: DateGroup) => {
+    setExpandedDates((prev) => {
+      const next = new Set(prev);
+      const willExpand = !next.has(group.dateKey);
+      if (willExpand) {
+        next.add(group.dateKey);
+        if (group.sessions[0]) selectSession(group.sessions[0].id);
+      } else {
+        next.delete(group.dateKey);
+      }
+      return next;
+    });
+  };
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -138,6 +191,11 @@ export function SessionLibraryPane({
     () => sessions.filter((s) => s.categoryId == null).length,
     [sessions],
   );
+
+  const selectSession = (id: string) => {
+    onSelectSession(id);
+    if (isMobile) setOpenMobile(false);
+  };
 
   return (
     <>
@@ -297,14 +355,33 @@ export function SessionLibraryPane({
                   )}
               </div>
             ) : (
-              [...groups.entries()].map(([label, items]) => (
-                <SidebarGroup key={label}>
-                  <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">
-                    {label}
-                  </SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {items.map((session) => {
+              groups.map((group) => {
+                const expanded = expandedDates.has(group.dateKey);
+                return (
+                  <SidebarGroup key={group.dateKey}>
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex h-8 w-full shrink-0 items-center gap-1 rounded-md px-2 text-left text-xs font-medium text-sidebar-foreground/70 ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:hidden",
+                      )}
+                      onClick={() => toggleDateGroup(group)}
+                      aria-expanded={expanded}
+                      aria-label={`${group.label}（${group.sessions.length}件）`}
+                    >
+                      {expanded ? (
+                        <ChevronDown className="size-3.5 shrink-0" />
+                      ) : (
+                        <ChevronRight className="size-3.5 shrink-0" />
+                      )}
+                      <span className="truncate">{group.label}</span>
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        {group.sessions.length}
+                      </span>
+                    </button>
+                    {expanded && (
+                      <SidebarGroupContent>
+                        <SidebarMenu>
+                          {group.sessions.map((session) => {
                         const icons = sessionStatusIcons(session.status);
                         const thumbnailSrc =
                           session.youtubeId != null
@@ -314,7 +391,7 @@ export function SessionLibraryPane({
                           <SidebarMenuItem key={session.id}>
                             <SidebarMenuButton
                               isActive={session.id === selectedSessionId}
-                              onClick={() => onSelectSession(session.id)}
+                              onClick={() => selectSession(session.id)}
                               tooltip={session.title ?? "無題"}
                             >
                               {thumbnailSrc ? (
@@ -409,10 +486,12 @@ export function SessionLibraryPane({
                           </SidebarMenuItem>
                         );
                       })}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              ))
+                        </SidebarMenu>
+                      </SidebarGroupContent>
+                    )}
+                  </SidebarGroup>
+                );
+              })
             )}
           </ScrollArea>
         </SidebarContent>

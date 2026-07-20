@@ -3,12 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Search, X } from "lucide-react";
 
-import { RichTextEditor } from "@/components/editor/RichTextEditor";
+import { PlainTranscriptEditor } from "@/components/editor/PlainTranscriptEditor";
 import type { Session } from "@/lib/schema";
-import {
-  stripTranscriptFormatting,
-  transcriptToEditorHtml,
-} from "@/lib/rich-text/transcript-content";
+import { stripTranscriptFormatting } from "@/lib/rich-text/transcript-content";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,23 +14,20 @@ type TranscriptPaneProps = {
   session: Session | null;
   isProcessing: boolean;
   width?: number;
-  onChange?: (html: string) => void;
+  isMobile?: boolean;
+  onChange?: (plainText: string) => void;
 };
 
 export function TranscriptPane({
   session,
   isProcessing,
   width,
+  isMobile = false,
   onChange,
 }: TranscriptPaneProps) {
   const [query, setQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-
-  const editorContent = useMemo(
-    () => transcriptToEditorHtml(session?.transcript),
-    [session?.transcript],
-  );
 
   const plainText = useMemo(
     () => stripTranscriptFormatting(session?.transcript ?? ""),
@@ -68,8 +62,8 @@ export function TranscriptPane({
 
   return (
     <div
-      className="flex min-w-[280px] shrink-0 flex-col bg-canvas"
-      style={width != null ? { width } : { flex: 1.4 }}
+      className="flex min-h-0 min-w-0 w-full flex-1 flex-col bg-canvas md:shrink-0"
+      style={!isMobile && width != null ? { width } : undefined}
     >
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
         <h2 className="text-sm font-medium">文字起こし</h2>
@@ -136,7 +130,9 @@ export function TranscriptPane({
       <div className="min-h-0 flex-1 overflow-auto p-4">
         {!session && (
           <p className="text-sm text-muted-foreground">
-            左のサイドバーから「新規動画」を追加するか、セッションを選択してください。
+            {isMobile
+              ? "上部のメニューから履歴を開き、セッションを選択してください。"
+              : "左のサイドバーから「新規動画」を追加するか、セッションを選択してください。"}
           </p>
         )}
 
@@ -155,15 +151,17 @@ export function TranscriptPane({
         )}
 
         {canEdit && (
-          <RichTextEditor
-            key={session!.id}
-            initialContent={editorContent}
-            onChange={onChange!}
-            showFixedToolbar={false}
-            showHistory={false}
-            minHeightClassName="min-h-[320px]"
-            editorClassName="border-0 bg-transparent px-0 py-0"
-          />
+          <div className="flex h-full min-h-0 flex-col gap-2">
+            <p className="text-xs text-muted-foreground">
+              装飾・整理は右の「マイノート」へコピーして編集してください。
+            </p>
+            <PlainTranscriptEditor
+              sessionId={session!.id}
+              initialPlainText={plainText}
+              onChange={onChange!}
+              className="min-h-0 flex-1"
+            />
+          </div>
         )}
       </div>
     </div>

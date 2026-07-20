@@ -5,16 +5,17 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import type { Category, CategoryFilter, FocusMode, Session, SessionStatus } from "@/lib/schema";
 import { isProcessingStatus } from "@/lib/labels";
 import { loadPaneLayout, savePaneLayout } from "@/lib/pane-layout";
+import { stripTranscriptFormatting } from "@/lib/rich-text/transcript-content";
 import { toSessionListPatch } from "@/lib/session-list";
 import { normalizeYoutubeUrl, youtubeWatchUrl } from "@/lib/youtube/parse-url";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { GlobalHeader } from "@/components/workspace/GlobalHeader";
+import { MobileHistoryBridge } from "@/components/workspace/MobileHistoryBridge";
+import { MobileViewerEmpty } from "@/components/workspace/MobileViewerEmpty";
 import { useTheme } from "@/components/theme-provider";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
-  closeVisualExplainerTab,
-  navigateVisualExplainerTab,
   openVisualExplainerInNewTab,
-  prepareVisualExplainerTab,
 } from "@/lib/visual-explainer/open-tab";
 import { PaneResizer } from "@/components/workspace/PaneResizer";
 import { SessionLibraryPane } from "@/components/workspace/SessionLibraryPane";
@@ -47,6 +48,7 @@ function mergeSessionSummary(existing: Session, summary: Session): Session {
     transcriptRaw: existing.transcriptRaw,
     transcript: existing.transcript,
     summaryJson: existing.summaryJson,
+    summaryHtml: existing.summaryHtml,
     notesHtml: existing.notesHtml,
     hasVisualExplainer:
       summary.hasVisualExplainer || existing.hasVisualExplainer,
@@ -60,6 +62,7 @@ function preserveSessionBodies(existing: Session | undefined, meta: Session): Se
     transcriptRaw: existing.transcriptRaw,
     transcript: existing.transcript,
     summaryJson: existing.summaryJson,
+    summaryHtml: existing.summaryHtml,
     notesHtml: existing.notesHtml,
   };
 }
@@ -68,6 +71,7 @@ type SessionBodiesResponse = {
   transcriptRaw: string | null;
   transcript: string | null;
   summaryJson: Session["summaryJson"];
+  summaryHtml: string | null;
   notesHtml: string | null;
 };
 
@@ -126,6 +130,7 @@ export function Workspace({
   geminiConfigured,
 }: WorkspaceProps) {
   const { resolvedTheme } = useTheme();
+  const isMobile = useIsMobile();
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [searchQuery, setSearchQuery] = useState("");
@@ -160,6 +165,9 @@ export function Workspace({
     setLibraryWidth(layout.libraryWidth);
     setSourceWidth(layout.sourceWidth);
     setTranscriptWidth(layout.transcriptWidth);
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      setFocusMode(layout.mobileFocusMode);
+    }
   }, []);
 
   const resizeLibraryWidth = useCallback((delta: number) => {
@@ -225,6 +233,7 @@ export function Workspace({
           transcriptRaw: data.bodies.transcriptRaw,
           transcript: data.bodies.transcript,
           summaryJson: data.bodies.summaryJson,
+          summaryHtml: data.bodies.summaryHtml,
           notesHtml: data.bodies.notesHtml,
         },
       };
@@ -415,6 +424,36 @@ export function Workspace({
   const hasProcessingSessions = listSessions.some((s) =>
     isProcessingStatus(s.status),
   );
+
+  useEffect(() => {
+    if (!isMobile || selectedSessionId || isNewDraft || listSessions.length === 0) {
+      return;
+    }
+    setSelectedSessionId(listSessions[0]!.id);
+  }, [isMobile, selectedSessionId, isNewDraft, listSessions]);
+
+  useEffect(() => {
+    if (!isMobile || focusMode === "all") {
+      return;
+    }
+    savePaneLayout({
+      mobileFocusMode: focusMode === "transcript" ? "transcript" : "notes",
+    });
+  }, [isMobile, focusMode]);
+
+  useEffect(() => {
+    if (isMobile && focusMode === "all") {
+      setFocusMode(loadPaneLayout().mobileFocusMode);
+    }
+  }, [isMobile, focusMode]);
+
+  const handleFocusModeChange = useCallback((mode: FocusMode) => {
+    if (isMobile && mode === "all") {
+      setFocusMode("notes");
+      return;
+    }
+    setFocusMode(mode);
+  }, [isMobile]);
 
   useEffect(() => {
     if (!hasProcessingSessions) return;
@@ -635,7 +674,6 @@ export function Workspace({
 
   const handleGenerateDiagram = async () => {
     if (!selectedSessionId || !selectedSession?.summaryJson) return;
-    const previewTab = prepareVisualExplainerTab();
     applyOptimisticStatus(selectedSessionId, "generating_diagram");
     try {
       const { res, data } = await apiFetch(
@@ -645,19 +683,8 @@ export function Workspace({
       if (!res.ok) {
         throw new Error(String(data.error ?? "図解の生成に失敗しました"));
       }
-      const updated = data.session as Session | undefined;
       await refreshSession(selectedSessionId);
-      if (updated?.hasVisualExplainer) {
-        navigateVisualExplainerTab(
-          previewTab,
-          selectedSessionId,
-          resolvedTheme,
-        );
-      } else {
-        closeVisualExplainerTab(previewTab);
-      }
     } catch (err) {
-      closeVisualExplainerTab(previewTab);
       alert(err instanceof Error ? err.message : "図解の生成に失敗しました");
       void refreshSession(selectedSessionId);
     }
@@ -729,9 +756,6 @@ export function Workspace({
     }
 
     void refreshSession(selectedSessionId);
-    window.setTimeout(() => {
-      openVisualExplainerInNewTab(selectedSessionId, resolvedTheme);
-    }, 0);
   };
 
   const handleRepolish = async () => {
@@ -756,14 +780,17 @@ export function Workspace({
     }
   };
 
-  const handleTranscriptChange = async (html: string) => {
+  const handleTranscriptChange = async (plainText: string) => {
     if (!selectedSessionId) return;
-    if (html === (selectedSession?.transcript ?? "")) return;
+    const currentPlain = stripTranscriptFormatting(
+      selectedSession?.transcript ?? "",
+    );
+    if (plainText === currentPlain) return;
     const res = await fetch(`/api/sessions/${selectedSessionId}`, {
       method: "PATCH",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transcript: html }),
+      body: JSON.stringify({ transcript: plainText }),
     });
     if (!res.ok) return;
     const data = (await res.json()) as { session: Session };
@@ -816,16 +843,60 @@ export function Workspace({
     );
   };
 
-  const handleCopySection = async (text: string) => {
+  const handleGenerateCriticalThinking = async () => {
     if (!selectedSessionId) return;
-    const existing = selectedSession?.notesHtml ?? "";
-    const escaped = text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-    const addition = `<p>${escaped.replace(/\n/g, "<br/>")}</p>`;
-    const nextHtml = existing + addition;
-    await handleNotesChange(nextHtml);
+    try {
+      const { res, data } = await apiFetch(
+        `/api/sessions/${selectedSessionId}/critical-thinking`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        throw new Error(String(data.error ?? "批判的視点の生成に失敗しました"));
+      }
+      const updated = data.session as Session | undefined;
+      const notesHtml = (data.notesHtml as string | undefined) ?? updated?.notesHtml;
+      if (updated && notesHtml != null) {
+        setSessionDetails((prev) => ({
+          ...prev,
+          [selectedSessionId]: {
+            ...(prev[selectedSessionId] ?? selectedSummary ?? updated),
+            ...updated,
+            notesHtml,
+          },
+        }));
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === selectedSessionId
+              ? { ...s, notesHtml, updatedAt: updated.updatedAt }
+              : s,
+          ),
+        );
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "批判的視点の生成に失敗しました";
+      throw new Error(message);
+    }
+  };
+
+  const handleSummaryChange = async (html: string) => {
+    if (!selectedSessionId) return;
+    if (html === (selectedSession?.summaryHtml ?? "")) return;
+    const res = await fetch(`/api/sessions/${selectedSessionId}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ summaryHtml: html }),
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { session: Session };
+    setSessionDetails((prev) => ({
+      ...prev,
+      [selectedSessionId]: {
+        ...(prev[selectedSessionId] ?? selectedSummary ?? data.session),
+        ...data.session,
+      },
+    }));
   };
 
   const handleAssignCategory = async (
@@ -926,14 +997,22 @@ export function Workspace({
     }
   };
 
-  const showPane2 = focusMode === "all" && !isNewDraft;
+  const showPane2 = !isMobile && focusMode === "all" && !isNewDraft;
   const hasSelection = selectedSessionId != null && !isNewDraft;
   const bodiesReady =
     hasSelection && bodiesLoadedIds.has(selectedSessionId);
   const showPane3 =
-    hasSelection && (focusMode === "all" || focusMode === "transcript");
+    hasSelection &&
+    (isMobile
+      ? focusMode === "transcript"
+      : focusMode === "all" || focusMode === "transcript");
   const showPane4 =
-    hasSelection && (focusMode === "all" || focusMode === "notes");
+    hasSelection &&
+    (isMobile
+      ? focusMode === "notes"
+      : focusMode === "all" || focusMode === "notes");
+  const showMobileNewDraft = isMobile && isNewDraft;
+  const showMobileEmpty = isMobile && !hasSelection && !isNewDraft;
 
   const processing =
     isCreating ||
@@ -946,7 +1025,7 @@ export function Workspace({
   return (
     <SidebarProvider
       defaultOpen
-      className="h-screen min-w-[1280px] w-full overflow-hidden bg-background text-foreground"
+      className="h-screen w-full min-w-0 overflow-hidden bg-background text-foreground md:min-w-[1280px]"
       style={
         {
           "--sidebar-width": `${libraryWidth}px`,
@@ -979,25 +1058,33 @@ export function Workspace({
         onDeleteCategory={handleDeleteCategory}
       />
 
-      <PaneResizer onResize={resizeLibraryWidth} />
+      {!isMobile && <PaneResizer onResize={resizeLibraryWidth} />}
 
       <SidebarInset className="flex min-w-0 flex-col bg-background">
         <GlobalHeader
           session={isNewDraft ? null : selectedSession}
           focusMode={focusMode}
           geminiConfigured={geminiConfigured}
-          onFocusModeChange={setFocusMode}
+          isMobile={isMobile}
+          onFocusModeChange={handleFocusModeChange}
         />
 
-        <div className="flex min-h-0 flex-1">
-          {(showPane2 || isNewDraft) && (
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+          {showMobileEmpty && (
+            <MobileHistoryBridge>
+              {(openHistory) => <MobileViewerEmpty onOpenHistory={openHistory} />}
+            </MobileHistoryBridge>
+          )}
+
+          {(showPane2 || showMobileNewDraft) && (
             <>
               <VideoInputPane
                 session={isNewDraft ? null : selectedSession}
                 draftUrl={draftUrl}
                 isCreating={isCreating}
                 pendingAction={pendingAction}
-                width={sourceWidth}
+                width={isMobile ? undefined : sourceWidth}
+                isMobile={isMobile}
                 onDraftUrlChange={setDraftUrl}
                 onCreateSession={handleCreateSession}
                 onReprocess={handleReprocess}
@@ -1005,7 +1092,7 @@ export function Workspace({
                 onRepolish={handleRepolish}
                 geminiConfigured={geminiConfigured}
               />
-              {(showPane3 || showPane4) && (
+              {!isMobile && (showPane3 || showPane4) && (
                 <PaneResizer onResize={resizeSourceWidth} />
               )}
             </>
@@ -1016,10 +1103,13 @@ export function Workspace({
               <TranscriptPane
                 session={selectedSession}
                 isProcessing={processing || isLoadingDetail}
-                width={transcriptWidth}
+                width={isMobile ? undefined : transcriptWidth}
+                isMobile={isMobile}
                 onChange={handleTranscriptChange}
               />
-              {showPane4 && <PaneResizer onResize={resizeTranscriptWidth} />}
+              {!isMobile && showPane4 && (
+                <PaneResizer onResize={resizeTranscriptWidth} />
+              )}
             </>
           )}
 
@@ -1029,12 +1119,14 @@ export function Workspace({
               bodiesReady={bodiesReady}
               geminiConfigured={geminiConfigured}
               isProcessing={processing || isLoadingDetail}
+              isMobile={isMobile}
               onNotesChange={handleNotesChange}
+              onSummaryChange={handleSummaryChange}
+              onGenerateCriticalThinking={handleGenerateCriticalThinking}
               onResummarize={handleResummarize}
               onGenerateDiagram={handleGenerateDiagram}
               onRediagram={handleRediagram}
               onImportDiagram={handleImportDiagram}
-              onCopySection={handleCopySection}
             />
           )}
         </div>

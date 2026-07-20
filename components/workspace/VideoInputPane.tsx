@@ -20,6 +20,7 @@ type VideoInputPaneProps = {
   isCreating: boolean;
   pendingAction: SessionAction | null;
   width?: number;
+  isMobile?: boolean;
   geminiConfigured: boolean;
   onDraftUrlChange: (url: string) => void;
   onCreateSession: () => void;
@@ -150,6 +151,7 @@ export function VideoInputPane({
   isCreating,
   pendingAction,
   width = 300,
+  isMobile = false,
   geminiConfigured,
   onDraftUrlChange,
   onCreateSession,
@@ -180,8 +182,10 @@ export function VideoInputPane({
 
   return (
     <div
-      className="flex min-w-[220px] shrink-0 flex-col border-r border-border bg-background"
-      style={{ width }}
+      className={cn(
+        "flex min-h-0 min-w-0 flex-1 flex-col bg-background md:min-w-[220px] md:shrink-0 md:flex-none md:border-r md:border-border",
+      )}
+      style={isMobile ? undefined : { width }}
     >
       <div className="flex h-10 shrink-0 items-center border-b border-border px-3">
         <h2 className="text-sm font-medium">ソース</h2>

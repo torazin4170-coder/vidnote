@@ -5,6 +5,7 @@ export type PaneLayout = {
   sourceWidth: number;
   transcriptWidth: number;
   summaryNotesSplitRatio: number;
+  mobileFocusMode: "transcript" | "notes";
 };
 
 const DEFAULT_LAYOUT: PaneLayout = {
@@ -12,6 +13,7 @@ const DEFAULT_LAYOUT: PaneLayout = {
   sourceWidth: 300,
   transcriptWidth: 520,
   summaryNotesSplitRatio: 0.42,
+  mobileFocusMode: "notes",
 };
 
 function clamp(value: unknown, min: number, max: number, fallback: number): number {
@@ -42,6 +44,8 @@ export function loadPaneLayout(): PaneLayout {
         0.7,
         DEFAULT_LAYOUT.summaryNotesSplitRatio,
       ),
+      mobileFocusMode:
+        parsed.mobileFocusMode === "transcript" ? "transcript" : "notes",
     };
   } catch {
     return DEFAULT_LAYOUT;

@@ -248,6 +248,8 @@ export function SessionLibraryPane({
                     placeholder="タイトル・字幕・ノートを検索"
                     value={searchQuery}
                     className={cn("pl-8 pr-8", isMobile && "h-11 text-base")}
+                    autoComplete="off"
+                    enterKeyHint="search"
                     onChange={(e) => onSearchQueryChange(e.target.value)}
                   />
                   {searchQuery && (

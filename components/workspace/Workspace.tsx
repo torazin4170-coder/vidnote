@@ -11,10 +11,9 @@ import { normalizeYoutubeUrl, youtubeWatchUrl } from "@/lib/youtube/parse-url";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { GlobalHeader } from "@/components/workspace/GlobalHeader";
 import { MobileBottomNav } from "@/components/workspace/mobile/MobileBottomNav";
+import { MobileHistoryHome } from "@/components/workspace/mobile/MobileHistoryHome";
 import { MobileTopBar } from "@/components/workspace/mobile/MobileTopBar";
 import { mobileUi } from "@/components/workspace/mobile/mobile-ui";
-import { MobileHistoryBridge } from "@/components/workspace/MobileHistoryBridge";
-import { MobileViewerEmpty } from "@/components/workspace/MobileViewerEmpty";
 import { useTheme } from "@/components/theme-provider";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -428,13 +427,6 @@ export function Workspace({
   const hasProcessingSessions = listSessions.some((s) =>
     isProcessingStatus(s.status),
   );
-
-  useEffect(() => {
-    if (!isMobile || selectedSessionId || isNewDraft || listSessions.length === 0) {
-      return;
-    }
-    setSelectedSessionId(listSessions[0]!.id);
-  }, [isMobile, selectedSessionId, isNewDraft, listSessions]);
 
   useEffect(() => {
     if (!isMobile || focusMode === "all") {
@@ -1016,7 +1008,6 @@ export function Workspace({
       ? focusMode === "notes"
       : focusMode === "all" || focusMode === "notes");
   const showMobileNewDraft = isMobile && isNewDraft;
-  const showMobileEmpty = isMobile && !hasSelection && !isNewDraft;
 
   const processing =
     isCreating ||
@@ -1062,6 +1053,10 @@ export function Workspace({
         onDeleteCategory={handleDeleteCategory}
       />
 
+      {isMobile && (
+        <MobileHistoryHome hasSession={hasSelection} isNewDraft={isNewDraft} />
+      )}
+
       {!isMobile && <PaneResizer onResize={resizeLibraryWidth} />}
 
       <SidebarInset
@@ -1080,12 +1075,6 @@ export function Workspace({
         )}
 
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-          {showMobileEmpty && (
-            <MobileHistoryBridge>
-              {(openHistory) => <MobileViewerEmpty onOpenHistory={openHistory} />}
-            </MobileHistoryBridge>
-          )}
-
           {(showPane2 || showMobileNewDraft) && (
             <>
               <VideoInputPane

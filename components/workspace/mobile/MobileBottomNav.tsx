@@ -32,7 +32,7 @@ export function MobileBottomNav({
   hasSession,
   onFocusModeChange,
 }: MobileBottomNavProps) {
-  const { setOpenMobile } = useSidebar();
+  const { openMobile, setOpenMobile } = useSidebar();
   const activeTab = focusModeToMobileTab(focusMode);
 
   return (
@@ -43,7 +43,9 @@ export function MobileBottomNav({
       <div className="mx-auto grid h-16 max-w-lg grid-cols-3">
         {tabs.map(({ id, label, icon: Icon }) => {
           const isHistory = id === "history";
-          const isActive = !isHistory && activeTab === id;
+          const isActive = isHistory
+            ? openMobile || !hasSession
+            : activeTab === id;
           const disabled = !isHistory && !hasSession;
 
           return (

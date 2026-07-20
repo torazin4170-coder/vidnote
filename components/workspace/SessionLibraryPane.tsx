@@ -163,15 +163,18 @@ export function SessionLibraryPane({
     });
   }, [selectedDateKey, groups]);
 
+  const selectSession = (id: string) => {
+    onSelectSession(id);
+    if (isMobile) setOpenMobile(false);
+  };
+
   const toggleDateGroup = (group: DateGroup) => {
     setExpandedDates((prev) => {
       const next = new Set(prev);
-      const willExpand = !next.has(group.dateKey);
-      if (willExpand) {
-        next.add(group.dateKey);
-        if (group.sessions[0]) selectSession(group.sessions[0].id);
-      } else {
+      if (next.has(group.dateKey)) {
         next.delete(group.dateKey);
+      } else {
+        next.add(group.dateKey);
       }
       return next;
     });
@@ -192,10 +195,22 @@ export function SessionLibraryPane({
     [sessions],
   );
 
-  const selectSession = (id: string) => {
-    onSelectSession(id);
-    if (isMobile) setOpenMobile(false);
-  };
+  const categoryChips = useMemo(
+    () => [
+      { id: "all" as CategoryFilter, label: "すべて", count: sessions.length },
+      {
+        id: "uncategorized" as CategoryFilter,
+        label: "未分類",
+        count: uncategorizedCount,
+      },
+      ...categories.map((category) => ({
+        id: category.id as CategoryFilter,
+        label: category.name,
+        count: categoryCounts.get(category.id) ?? 0,
+      })),
+    ],
+    [sessions.length, uncategorizedCount, categories, categoryCounts],
+  );
 
   return (
     <>
@@ -254,6 +269,45 @@ export function SessionLibraryPane({
               </div>
             </SidebarGroupContent>
           </SidebarGroup>
+
+          {isMobile && (
+            <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+              <SidebarGroupContent>
+                <div className="flex items-center justify-between px-4 pt-1 pb-2">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    カテゴリー
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setCategoryManageOpen(true)}
+                    aria-label="カテゴリー管理"
+                  >
+                    <Settings2 className="size-4" />
+                  </Button>
+                </div>
+                <div className="flex gap-2 overflow-x-auto px-4 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {categoryChips.map((chip) => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      onClick={() => onCategoryFilterChange(chip.id)}
+                      className={cn(
+                        "shrink-0 rounded-full border px-3 py-2 text-sm font-medium transition-colors",
+                        categoryFilter === chip.id
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-background text-foreground",
+                      )}
+                    >
+                      {chip.label}
+                      <span className="ml-1 text-xs opacity-70">{chip.count}</span>
+                    </button>
+                  ))}
+                </div>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
 
           {!isMobile && (
           <SidebarGroup>

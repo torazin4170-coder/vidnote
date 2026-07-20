@@ -201,13 +201,26 @@ export function SessionLibraryPane({
     <>
       <Sidebar
         collapsible="icon"
-        className="border-r border-sidebar-border [&_[data-slot=sidebar-container]]:bg-sidebar"
+        className={cn(
+          "border-r border-sidebar-border [&_[data-slot=sidebar-container]]:bg-sidebar",
+          isMobile && "vidnote-mobile-sheet",
+        )}
       >
-        <SidebarHeader className="flex h-12 flex-row items-center justify-between gap-1 border-b border-sidebar-border px-2">
-          <span className="truncate text-sm font-semibold group-data-[collapsible=icon]:hidden">
-            VidNote
+        <SidebarHeader
+          className={cn(
+            "flex h-12 flex-row items-center justify-between gap-1 border-b border-sidebar-border px-2",
+            isMobile && "h-14 px-4",
+          )}
+        >
+          <span
+            className={cn(
+              "truncate text-sm font-semibold group-data-[collapsible=icon]:hidden",
+              isMobile && "text-lg",
+            )}
+          >
+            履歴
           </span>
-          <Pane1Toggle />
+          {!isMobile && <Pane1Toggle />}
         </SidebarHeader>
 
         <SidebarContent>
@@ -219,7 +232,7 @@ export function SessionLibraryPane({
                   <Input
                     placeholder="タイトル・字幕・ノートを検索"
                     value={searchQuery}
-                    className="pl-8 pr-8"
+                    className={cn("pl-8 pr-8", isMobile && "h-11 text-base")}
                     onChange={(e) => onSearchQueryChange(e.target.value)}
                   />
                   {searchQuery && (
@@ -242,6 +255,7 @@ export function SessionLibraryPane({
             </SidebarGroupContent>
           </SidebarGroup>
 
+          {!isMobile && (
           <SidebarGroup>
             <SidebarGroupLabel className="flex items-center justify-between group-data-[collapsible=icon]:hidden">
               <span>カテゴリー</span>
@@ -301,7 +315,9 @@ export function SessionLibraryPane({
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+          )}
 
+          {!isMobile && (
           <SidebarGroup>
             <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">
               セッション
@@ -329,10 +345,16 @@ export function SessionLibraryPane({
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+          )}
 
           <ScrollArea className="min-h-0 flex-1">
             {visibleSessions.length === 0 ? (
-              <div className="space-y-2 px-3 py-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+              <div
+                className={cn(
+                  "space-y-2 px-3 py-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden",
+                  isMobile && "px-4 py-4 text-sm",
+                )}
+              >
                 <p>
                   {searchQuery.trim()
                     ? "検索結果はありません"
@@ -344,7 +366,8 @@ export function SessionLibraryPane({
                 </p>
                 {!searchQuery.trim() &&
                   categoryFilter === "all" &&
-                  sessions.length === 0 && (
+                  sessions.length === 0 &&
+                  !isMobile && (
                     <p>
                       ローカル開発中は{" "}
                       <span className="font-medium text-foreground">
@@ -363,6 +386,7 @@ export function SessionLibraryPane({
                       type="button"
                       className={cn(
                         "flex h-8 w-full shrink-0 items-center gap-1 rounded-md px-2 text-left text-xs font-medium text-sidebar-foreground/70 ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:hidden",
+                        isMobile && "h-11 px-4 text-sm",
                       )}
                       onClick={() => toggleDateGroup(group)}
                       aria-expanded={expanded}

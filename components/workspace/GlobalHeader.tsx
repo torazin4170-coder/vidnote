@@ -24,7 +24,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Tooltip,
   TooltipContent,
@@ -35,7 +34,6 @@ type GlobalHeaderProps = {
   session: Session | null;
   focusMode: FocusMode;
   geminiConfigured: boolean;
-  isMobile?: boolean;
   onFocusModeChange: (mode: FocusMode) => void;
 };
 
@@ -58,7 +56,6 @@ export function GlobalHeader({
   session,
   focusMode,
   geminiConfigured,
-  isMobile = false,
   onFocusModeChange,
 }: GlobalHeaderProps) {
   const title = session?.title ?? "セッション未選択";
@@ -113,26 +110,8 @@ export function GlobalHeader({
     }
   };
 
-  const focusModes = isMobile
-    ? ([
-        ["transcript", "字幕"],
-        ["notes", "要点・ノート"],
-      ] as const)
-    : ([
-        ["all", "全表示"],
-        ["transcript", "字幕"],
-        ["notes", "ノート"],
-      ] as const);
-
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-2 md:px-3">
-      {isMobile && (
-        <SidebarTrigger
-          className="shrink-0"
-          aria-label="履歴を開く"
-        />
-      )}
-
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3">
       <Breadcrumb
         className="min-w-0 flex-1 overflow-hidden"
         aria-label="パンくず"
@@ -140,28 +119,33 @@ export function GlobalHeader({
         <BreadcrumbList className="flex-nowrap text-[11px]">
           <BreadcrumbItem className="min-w-0">
             <BreadcrumbPage className="truncate font-medium">
-              {isMobile ? (session?.title ?? "VidNote") : `VidNote / ${title}`}
+              VidNote / {title}
             </BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
 
       <div className="flex shrink-0 items-center gap-1">
-        {session && !isMobile && (
+        {session && (
           <Badge variant={statusBadgeVariant(session.status)}>
             {STATUS_LABELS[session.status]}
           </Badge>
         )}
 
         <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-          {focusModes.map(([mode, label]) => (
+          {(
+            [
+              ["all", "全表示"],
+              ["transcript", "字幕"],
+              ["notes", "ノート"],
+            ] as const
+          ).map(([mode, label]) => (
             <Button
               key={mode}
               type="button"
               size="xs"
               variant={focusMode === mode ? "secondary" : "ghost"}
               onClick={() => onFocusModeChange(mode)}
-              className={isMobile ? "px-2 text-xs" : undefined}
             >
               {label}
             </Button>
@@ -170,8 +154,7 @@ export function GlobalHeader({
 
         <ThemeToggle />
 
-        {!isMobile && (
-          <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -250,7 +233,6 @@ export function GlobalHeader({
             </div>
           </DialogContent>
         </Dialog>
-        )}
       </div>
     </header>
   );

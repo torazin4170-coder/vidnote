@@ -10,10 +10,14 @@ import { toSessionListPatch } from "@/lib/session-list";
 import { normalizeYoutubeUrl, youtubeWatchUrl } from "@/lib/youtube/parse-url";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { GlobalHeader } from "@/components/workspace/GlobalHeader";
+import { MobileBottomNav } from "@/components/workspace/mobile/MobileBottomNav";
+import { MobileTopBar } from "@/components/workspace/mobile/MobileTopBar";
+import { mobileUi } from "@/components/workspace/mobile/mobile-ui";
 import { MobileHistoryBridge } from "@/components/workspace/MobileHistoryBridge";
 import { MobileViewerEmpty } from "@/components/workspace/MobileViewerEmpty";
 import { useTheme } from "@/components/theme-provider";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import {
   openVisualExplainerInNewTab,
 } from "@/lib/visual-explainer/open-tab";
@@ -1060,14 +1064,20 @@ export function Workspace({
 
       {!isMobile && <PaneResizer onResize={resizeLibraryWidth} />}
 
-      <SidebarInset className="flex min-w-0 flex-col bg-background">
-        <GlobalHeader
-          session={isNewDraft ? null : selectedSession}
-          focusMode={focusMode}
-          geminiConfigured={geminiConfigured}
-          isMobile={isMobile}
-          onFocusModeChange={handleFocusModeChange}
-        />
+      <SidebarInset
+        data-vidnote-mobile={isMobile ? "true" : undefined}
+        className={cn("flex min-w-0 flex-col bg-background", isMobile && mobileUi.shell)}
+      >
+        {isMobile ? (
+          <MobileTopBar session={isNewDraft ? null : selectedSession} />
+        ) : (
+          <GlobalHeader
+            session={isNewDraft ? null : selectedSession}
+            focusMode={focusMode}
+            geminiConfigured={geminiConfigured}
+            onFocusModeChange={handleFocusModeChange}
+          />
+        )}
 
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           {showMobileEmpty && (
@@ -1130,6 +1140,14 @@ export function Workspace({
             />
           )}
         </div>
+
+        {isMobile && (
+          <MobileBottomNav
+            focusMode={focusMode}
+            hasSession={hasSelection}
+            onFocusModeChange={handleFocusModeChange}
+          />
+        )}
       </SidebarInset>
     </SidebarProvider>
   );

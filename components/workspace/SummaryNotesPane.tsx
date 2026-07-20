@@ -35,6 +35,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { mobileUi } from "@/components/workspace/mobile/mobile-ui";
+import { cn } from "@/lib/utils";
 
 const RichTextEditor = dynamic(
   () =>
@@ -93,6 +95,7 @@ export function SummaryNotesPane({
   const [isImportingDiagram, setIsImportingDiagram] = useState(false);
   const [isGeneratingCritical, setIsGeneratingCritical] = useState(false);
   const [notesEditorKey, setNotesEditorKey] = useState(0);
+  const [mobileSection, setMobileSection] = useState<"summary" | "notes">("summary");
   const containerRef = useRef<HTMLDivElement>(null);
   const diagramFileInputRef = useRef<HTMLInputElement>(null);
   const dragging = useRef(false);
@@ -239,7 +242,10 @@ export function SummaryNotesPane({
   return (
     <div
       ref={containerRef}
-      className="flex min-h-0 min-w-0 w-full flex-1 flex-col bg-background md:min-w-[300px] md:border-l md:border-border"
+      className={cn(
+        "flex min-h-0 min-w-0 w-full flex-1 flex-col bg-background md:min-w-[300px] md:border-l md:border-border",
+        isMobile && "max-md:flex-1",
+      )}
     >
       <input
         ref={diagramFileInputRef}
@@ -248,11 +254,35 @@ export function SummaryNotesPane({
         className="hidden"
         onChange={(event) => void handleImportDiagramFile(event)}
       />
+
+      {isMobile && (
+        <div className={cn("shrink-0 px-4 py-3", mobileUi.segment)}>
+          <button
+            type="button"
+            className={mobileUi.segmentItem(mobileSection === "summary")}
+            onClick={() => setMobileSection("summary")}
+          >
+            AI 要点
+          </button>
+          <button
+            type="button"
+            className={mobileUi.segmentItem(mobileSection === "notes")}
+            onClick={() => setMobileSection("notes")}
+          >
+            マイノート
+          </button>
+        </div>
+      )}
+
       <div
-        className="flex min-h-0 flex-col"
-        style={{ flex: `${splitRatio} 1 0%` }}
+        className={cn(
+          "flex min-h-0 flex-col",
+          isMobile && mobileSection !== "summary" && "max-md:hidden",
+          isMobile ? "max-md:flex-1" : undefined,
+        )}
+        style={isMobile ? undefined : { flex: `${splitRatio} 1 0%` }}
       >
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3 max-md:hidden md:flex">
           <h2 className="text-sm font-medium">AI 要点</h2>
           <Button
             type="button"
@@ -343,7 +373,7 @@ export function SummaryNotesPane({
           )}
         </div>
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-3 p-3">
+          <div className={cn("flex flex-col gap-3 p-3", mobileUi.paneBody, isMobile && "max-md:gap-4 max-md:p-4")}>
             {!geminiConfigured && (
               <p className="text-sm text-muted-foreground">
                 GEMINI_API_KEY 未設定のため、字幕取得のみ利用できます。
@@ -365,7 +395,8 @@ export function SummaryNotesPane({
                 onChange={onSummaryChange}
                 showFixedToolbar
                 showHistory
-                minHeightClassName="min-h-[120px]"
+                className="vidnote-mobile-editor"
+                minHeightClassName="min-h-[120px] max-md:min-h-[40vh]"
               />
             )}
 
@@ -438,6 +469,7 @@ export function SummaryNotesPane({
         </ScrollArea>
       </div>
 
+      {!isMobile && (
       <div
         className="flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-border bg-muted/50"
         onMouseDown={() => {
@@ -449,12 +481,17 @@ export function SummaryNotesPane({
       >
         <span className="text-[10px] text-muted-foreground">↕</span>
       </div>
+      )}
 
       <div
-        className="flex min-h-0 flex-col"
-        style={{ flex: `${1 - splitRatio} 1 0%` }}
+        className={cn(
+          "flex min-h-0 flex-col",
+          isMobile && mobileSection !== "notes" && "max-md:hidden",
+          isMobile ? "max-md:flex-1" : undefined,
+        )}
+        style={isMobile ? undefined : { flex: `${1 - splitRatio} 1 0%` }}
       >
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3 max-md:hidden md:flex">
           <h2 className="text-sm font-medium">マイノート</h2>
           <Button
             type="button"
@@ -481,10 +518,12 @@ export function SummaryNotesPane({
             <ClipboardCopy />
           </Button>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
+        <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden p-3", isMobile && "max-md:p-4")}>
           {!session ? (
-            <p className="text-sm text-muted-foreground">
-              左の一覧からセッションを選択してください。
+            <p className={cn("text-sm text-muted-foreground", mobileUi.paneBodyMuted)}>
+              {isMobile
+                ? "下部の「履歴」からセッションを選択してください。"
+                : "左の一覧からセッションを選択してください。"}
             </p>
           ) : !bodiesReady ? (
             <Skeleton className="h-[200px] w-full" />

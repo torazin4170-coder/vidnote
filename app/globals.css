@@ -266,3 +266,33 @@
     @apply font-sans;
   }
 }
+
+/* VidNote モバイル専用（data 属性がある場合のみ。PC レイアウトには影響しない） */
+[data-vidnote-mobile="true"] {
+  --vidnote-mobile-body: 1.0625rem;
+  --vidnote-mobile-body-sm: 0.9375rem;
+  --vidnote-mobile-leading: 1.75;
+  -webkit-tap-highlight-color: transparent;
+}
+
+[data-vidnote-mobile="true"] .vidnote-mobile-sheet [data-sidebar="menu-button"] {
+  min-height: 3rem;
+  font-size: var(--vidnote-mobile-body-sm);
+}
+
+[data-vidnote-mobile="true"] .vidnote-mobile-sheet [data-sidebar="menu-button"] img,
+[data-vidnote-mobile="true"] .vidnote-mobile-sheet [data-sidebar="menu-button"] .size-4 {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.375rem;
+}
+
+[data-vidnote-mobile="true"] .vidnote-mobile-editor .ProseMirror {
+  font-size: var(--vidnote-mobile-body);
+  line-height: var(--vidnote-mobile-leading);
+}
+
+[data-vidnote-mobile="true"] .vidnote-mobile-transcript {
+  font-size: var(--vidnote-mobile-body);
+  line-height: var(--vidnote-mobile-leading);
+}

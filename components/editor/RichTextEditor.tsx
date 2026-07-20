@@ -13,6 +13,7 @@ type RichTextEditorProps = {
   initialContent: string;
   onChange: (html: string) => void;
   editorClassName?: string;
+  className?: string;
   showFixedToolbar?: boolean;
   showHistory?: boolean;
   minHeightClassName?: string;
@@ -22,6 +23,7 @@ export function RichTextEditor({
   initialContent,
   onChange,
   editorClassName,
+  className,
   showFixedToolbar = true,
   showHistory = true,
   minHeightClassName = "min-h-[200px]",
@@ -69,6 +71,10 @@ export function RichTextEditor({
   useEffect(() => {
     if (!editor) return;
     if (initialContent === lastExternalContent.current) return;
+    if (initialContent === lastEmittedHtml.current) {
+      lastExternalContent.current = initialContent;
+      return;
+    }
 
     lastExternalContent.current = initialContent;
     const next = initialContent || "<p></p>";
@@ -105,7 +111,7 @@ export function RichTextEditor({
   if (!editor) return null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
+    <div className={cn("flex h-full min-h-0 flex-col gap-2", className)}>
       {showFixedToolbar && (
         <EditorFormatToolbar editor={editor} showHistory={showHistory} />
       )}

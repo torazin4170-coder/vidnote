@@ -6,9 +6,11 @@ import { Copy, Search, X } from "lucide-react";
 import { PlainTranscriptEditor } from "@/components/editor/PlainTranscriptEditor";
 import type { Session } from "@/lib/schema";
 import { stripTranscriptFormatting } from "@/lib/rich-text/transcript-content";
+import { mobileUi } from "@/components/workspace/mobile/mobile-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 type TranscriptPaneProps = {
   session: Session | null;
@@ -65,8 +67,8 @@ export function TranscriptPane({
       className="flex min-h-0 min-w-0 w-full flex-1 flex-col bg-canvas md:shrink-0"
       style={!isMobile && width != null ? { width } : undefined}
     >
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
-        <h2 className="text-sm font-medium">文字起こし</h2>
+      <div className={cn("flex h-10 shrink-0 items-center gap-2 border-b border-border px-3", mobileUi.paneHeader, isMobile && "max-md:border-b")}>
+        <h2 className="text-sm font-medium max-md:text-base max-md:font-semibold">文字起こし</h2>
         {charCount > 0 && (
           <span className="text-xs text-muted-foreground">
             {charCount.toLocaleString()} 文字
@@ -127,7 +129,7 @@ export function TranscriptPane({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      <div className={cn("min-h-0 flex-1 overflow-auto p-4", isMobile && "max-md:p-4")}>
         {!session && (
           <p className="text-sm text-muted-foreground">
             {isMobile
@@ -152,14 +154,16 @@ export function TranscriptPane({
 
         {canEdit && (
           <div className="flex h-full min-h-0 flex-col gap-2">
+            {!isMobile && (
             <p className="text-xs text-muted-foreground">
               装飾・整理は右の「マイノート」へコピーして編集してください。
             </p>
+            )}
             <PlainTranscriptEditor
               sessionId={session!.id}
               initialPlainText={plainText}
               onChange={onChange!}
-              className="min-h-0 flex-1"
+              className={cn("min-h-0 flex-1", isMobile && "vidnote-mobile-transcript max-md:min-h-[50vh] max-md:text-[1.0625rem] max-md:leading-[1.75] max-md:px-4 max-md:py-3")}
             />
           </div>
         )}

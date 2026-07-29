@@ -64,7 +64,9 @@ export function TranscriptPane({
 
   return (
     <div
-      className="flex min-h-0 min-w-0 w-full flex-1 flex-col bg-canvas md:shrink-0"
+      className={cn(
+        "flex min-h-0 min-w-0 w-full flex-1 flex-col bg-canvas md:min-w-[280px] md:shrink-0 md:flex-none",
+      )}
       style={!isMobile && width != null ? { width } : undefined}
     >
       <div className={cn("flex h-10 shrink-0 items-center gap-2 border-b border-border px-3", mobileUi.paneHeader, isMobile && "max-md:border-b")}>

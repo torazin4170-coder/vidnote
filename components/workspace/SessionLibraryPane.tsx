@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import {
@@ -126,6 +126,7 @@ export function SessionLibraryPane({
 }: SessionLibraryPaneProps) {
   const isMobile = useIsMobile();
   const { setOpenMobile } = useSidebar();
+  const sessionListRef = useRef<HTMLDivElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [categoryManageOpen, setCategoryManageOpen] = useState(false);
@@ -212,6 +213,31 @@ export function SessionLibraryPane({
     [sessions.length, uncategorizedCount, categories, categoryCounts],
   );
 
+  const activeCategoryLabel = useMemo(
+    () =>
+      categoryChips.find((chip) => chip.id === categoryFilter)?.label ?? "すべて",
+    [categoryChips, categoryFilter],
+  );
+
+  useEffect(() => {
+    setExpandedDates((prev) => {
+      const next = new Set(prev);
+      for (const group of groups) {
+        next.add(group.dateKey);
+      }
+      return next;
+    });
+
+    requestAnimationFrame(() => {
+      const viewport = sessionListRef.current?.querySelector(
+        '[data-slot="scroll-area-viewport"]',
+      );
+      if (viewport instanceof HTMLElement) {
+        viewport.scrollTop = 0;
+      }
+    });
+  }, [categoryFilter, searchQuery]);
+
   return (
     <>
       <Sidebar
@@ -235,10 +261,41 @@ export function SessionLibraryPane({
           >
             履歴
           </span>
-          {!isMobile && <Pane1Toggle />}
+          <div className="flex items-center gap-0.5">
+            {!isMobile && (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={onNewSession}
+                  aria-label="新規動画"
+                  title="新規動画"
+                >
+                  <Plus />
+                </Button>
+                {sessions.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => setDeleteAllOpen(true)}
+                    aria-label="履歴をすべて削除"
+                    title="履歴をすべて削除"
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 />
+                  </Button>
+                )}
+              </>
+            )}
+            {!isMobile && <Pane1Toggle />}
+          </div>
         </SidebarHeader>
 
-        <SidebarContent>
+        <SidebarContent
+          className={cn(!isMobile && "overflow-hidden")}
+        >
           <SidebarGroup className="group-data-[collapsible=icon]:hidden">
             <SidebarGroupContent>
               <div className="flex flex-col gap-2 px-2 pt-2">
@@ -312,7 +369,7 @@ export function SessionLibraryPane({
           )}
 
           {!isMobile && (
-          <SidebarGroup>
+          <SidebarGroup className="max-h-[min(240px,35vh)] shrink-0 overflow-y-auto">
             <SidebarGroupLabel className="flex items-center justify-between group-data-[collapsible=icon]:hidden">
               <span>カテゴリー</span>
               <Button
@@ -373,37 +430,24 @@ export function SessionLibraryPane({
           </SidebarGroup>
           )}
 
-          {!isMobile && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">
-              セッション
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton onClick={onNewSession} tooltip="新規動画">
-                    <Plus />
-                    <span>新規動画</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                {sessions.length > 0 && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      onClick={() => setDeleteAllOpen(true)}
-                      tooltip="履歴をすべて削除"
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <Trash2 />
-                      <span>履歴をすべて削除</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-          )}
-
+          <div ref={sessionListRef} className="flex min-h-0 flex-1 flex-col">
           <ScrollArea className="min-h-0 flex-1">
+            {!isMobile && (
+              <div className="sticky top-0 z-10 border-b border-sidebar-border bg-sidebar px-3 py-2 group-data-[collapsible=icon]:hidden">
+                <p className="truncate text-xs font-medium text-sidebar-foreground">
+                  {categoryFilter === "all" ? (
+                    "セッション"
+                  ) : (
+                    <>
+                      {activeCategoryLabel}
+                      <span className="ml-2 font-normal text-muted-foreground">
+                        {visibleSessions.length}件
+                      </span>
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
             {visibleSessions.length === 0 ? (
               <div
                 className={cn(
@@ -574,6 +618,7 @@ export function SessionLibraryPane({
               })
             )}
           </ScrollArea>
+          </div>
         </SidebarContent>
       </Sidebar>
 

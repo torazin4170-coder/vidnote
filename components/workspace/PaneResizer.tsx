@@ -39,7 +39,8 @@ export function PaneResizer({ onResize, className }: PaneResizerProps) {
       aria-label="ペイン幅を調整"
       onMouseDown={onMouseDown}
       className={cn(
-        "w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/40 active:bg-primary/60",
+        "relative z-10 w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/40 active:bg-primary/60",
+        "before:absolute before:inset-y-0 before:-left-1.5 before:-right-1.5 before:content-['']",
         className,
       )}
     />

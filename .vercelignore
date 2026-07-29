@@ -1,0 +1,6 @@
+video-transcript-assistant/
+cloudflared/
+.relay-tunnel-url
+.vercel-deploy-password.txt
+/data/
+diagram-workspace/output/

@@ -993,7 +993,9 @@ export function Workspace({
     }
   };
 
-  const showPane2 = !isMobile && focusMode === "all" && !isNewDraft;
+  const showPane2 =
+    !isMobile &&
+    (isNewDraft || (focusMode === "all" && selectedSessionId != null));
   const hasSelection = selectedSessionId != null && !isNewDraft;
   const bodiesReady =
     hasSelection && bodiesLoadedIds.has(selectedSessionId);
@@ -1044,6 +1046,7 @@ export function Workspace({
           setIsNewDraft(true);
           setSelectedSessionId(null);
           setDraftUrl("");
+          if (!isMobile) setFocusMode("all");
         }}
         onDeleteSession={handleDeleteSession}
         onDeleteAllSessions={handleDeleteAllSessions}

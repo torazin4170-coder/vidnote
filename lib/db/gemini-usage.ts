@@ -133,6 +133,7 @@ async function queryTotalsByOperation(): Promise<
     polish: emptyTotals(),
     summary: emptyTotals(),
     diagram: emptyTotals(),
+    critical: emptyTotals(),
   };
 
   for (const row of result.rows) {

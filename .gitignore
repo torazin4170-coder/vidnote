@@ -45,3 +45,6 @@ next-env.d.ts
 diagram-workspace/input/prompt.md
 .vercel
 .vercel-deploy-password.txt
+.relay-tunnel-url
+cloudflared/config.yml
+diagram-workspace/output/diagram.preview.html

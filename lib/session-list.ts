@@ -15,6 +15,7 @@ export function toSessionListPatch(session: Session): Session {
     transcriptRaw: null,
     transcript: null,
     summaryJson: null,
+    summaryHtml: null,
     hasVisualExplainer: session.hasVisualExplainer,
     visualExplainerHtml: null,
     notesHtml: null,

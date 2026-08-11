@@ -28,6 +28,8 @@ export function toDbSessionRow(row: Record<string, unknown>): DbSessionRow {
     transcript: row.transcript != null ? String(row.transcript) : null,
     summary_json:
       row.summary_json != null ? String(row.summary_json) : null,
+    summary_html:
+      row.summary_html != null ? String(row.summary_html) : null,
     has_visual_explainer:
       row.has_visual_explainer != null
         ? Number(row.has_visual_explainer)

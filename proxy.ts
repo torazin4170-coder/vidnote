@@ -7,7 +7,7 @@ import {
   isAuthenticatedSession,
 } from "@/lib/auth";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/relay/register"];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(

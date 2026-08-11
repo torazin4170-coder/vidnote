@@ -17,7 +17,7 @@ function buildAutoSummaryBlock(summary: SummarySections): string {
   ].filter(Boolean);
 
   if (sections.length === 0) return "";
-  return `${AUTO_SUMMARY_MARKER}${sections.join("")}`;
+  return `${AUTO_SUMMARY_MARKER}${sections.join('<p><br></p>')}`;
 }
 
 export function appendSummarySectionsToNotes(

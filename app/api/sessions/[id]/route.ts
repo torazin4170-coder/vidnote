@@ -12,6 +12,7 @@ import { stripTranscriptFormatting } from "@/lib/rich-text/transcript-content";
 
 const patchSchema = z.object({
   notesHtml: z.string().optional(),
+  summaryHtml: z.string().optional(),
   transcript: z.string().min(1).optional(),
   title: z.string().nullable().optional(),
   thumbnailUrl: z.string().nullable().optional(),
@@ -48,6 +49,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const session = await updateSession(id, {
       notesHtml: body.notesHtml ?? existing.notesHtml,
+      summaryHtml: body.summaryHtml ?? existing.summaryHtml,
       transcript: nextTranscript,
       title: body.title !== undefined ? body.title : existing.title,
       thumbnailUrl:
@@ -61,6 +63,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         ? {
             status: "transcribed",
             summaryJson: null,
+            summaryHtml: null,
             errorMessage: null,
           }
         : {}),

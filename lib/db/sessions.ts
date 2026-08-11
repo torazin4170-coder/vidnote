@@ -23,7 +23,7 @@ const SESSION_FULL_SELECT = `
   SELECT
     s.id, s.youtube_url, s.youtube_id, s.title, s.thumbnail_url, s.duration_sec,
     s.status, s.category_id, c.name AS category_name,
-    s.transcript_raw, s.transcript, s.summary_json,
+    s.transcript_raw, s.transcript, s.summary_json, s.summary_html,
     ${HAS_VISUAL_EXPLAINER_SQL},
     s.notes_html, s.error_message,
     s.created_at, s.updated_at
@@ -112,13 +112,14 @@ export type SessionBodies = {
   transcriptRaw: string | null;
   transcript: string | null;
   summaryJson: SummarySections | null;
+  summaryHtml: string | null;
   notesHtml: string | null;
 };
 
 export async function getSessionBodies(id: string): Promise<SessionBodies | null> {
   const db = await getDb();
   const result = await db.execute({
-    sql: `SELECT transcript_raw, transcript, summary_json, notes_html
+    sql: `SELECT transcript_raw, transcript, summary_json, summary_html, notes_html
           FROM sessions WHERE id = ?`,
     args: [id],
   });
@@ -140,6 +141,7 @@ export async function getSessionBodies(id: string): Promise<SessionBodies | null
     transcriptRaw: row.transcript_raw != null ? String(row.transcript_raw) : null,
     transcript: row.transcript != null ? String(row.transcript) : null,
     summaryJson,
+    summaryHtml: row.summary_html != null ? String(row.summary_html) : null,
     notesHtml: row.notes_html != null ? String(row.notes_html) : null,
   };
 }
@@ -217,6 +219,7 @@ export async function updateSession(
     transcriptRaw: string | null;
     transcript: string | null;
     summaryJson: string | null;
+    summaryHtml: string | null;
     visualExplainerHtml: string | null;
     notesHtml: string | null;
     errorMessage: string | null;
@@ -235,6 +238,7 @@ export async function updateSession(
     transcriptRaw: "transcript_raw",
     transcript: "transcript",
     summaryJson: "summary_json",
+    summaryHtml: "summary_html",
     visualExplainerHtml: "visual_explainer_html",
     notesHtml: "notes_html",
     errorMessage: "error_message",

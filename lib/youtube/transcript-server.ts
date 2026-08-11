@@ -1,6 +1,7 @@
 import { YoutubeTranscript } from "youtube-transcript";
 
 import { isVercel } from "@/lib/env";
+import { resolveRelayUrl } from "@/lib/youtube/resolve-relay-url";
 import {
   fetchCaptions,
   fetchMetadataViaOembed,
@@ -41,36 +42,72 @@ function friendlyTranscriptError(err: unknown): string {
   return message.replace(/^\[YoutubeTranscript\]\s*🚨\s*/, "");
 }
 
-async function fetchViaRelay(videoId: string): Promise<TranscriptServerResult> {
-  const relayUrl = process.env.TRANSCRIPT_RELAY_URL?.trim();
-  if (!relayUrl) {
-    throw new Error("TRANSCRIPT_RELAY_URL が未設定です");
-  }
-
+async function fetchViaRelay(
+  videoId: string,
+  relayUrl: string,
+): Promise<TranscriptServerResult> {
   const secret = process.env.TRANSCRIPT_RELAY_SECRET?.trim();
-  const endpoint = `${relayUrl.replace(/\/$/, "")}/transcript`;
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
-    },
-    body: JSON.stringify({ videoId }),
-    cache: "no-store",
-  });
+  const endpoint = `${relayUrl}/transcript`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
+  };
+  const body = JSON.stringify({ videoId });
 
-  const raw = await res.text();
-  const contentType = res.headers.get("content-type") ?? "";
+  const maxAttempts = 3;
+  let lastStatus = 0;
+  let lastRaw = "";
 
-  if (!contentType.includes("application/json")) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let res: Response;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body,
+        cache: "no-store",
+      });
+    } catch (err) {
+      const networkMessage = err instanceof Error ? err.message : String(err);
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+        continue;
+      }
+      throw new Error(
+        `トンネルに接続できません（${networkMessage}）。VidNote Relay を起動し直し、「Registered with VidNote」と表示されるまで待ってから再試行してください。`,
+      );
+    }
+
+    lastStatus = res.status;
+    lastRaw = await res.text();
+    const contentType = res.headers.get("content-type") ?? "";
+
+    if (res.status === 401) {
+      throw new Error(
+        "リレー認証に失敗しました（HTTP 401）。Vercel の TRANSCRIPT_RELAY_SECRET が自宅 PC のリレーと一致しているか確認してください。",
+      );
+    }
+
+    if (contentType.includes("application/json")) {
+      break;
+    }
+
+    if ((res.status === 502 || res.status === 503) && attempt < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+      continue;
+    }
+
     const hint =
       res.status === 502 || res.status === 503
-        ? "npm run relay だけでは不十分です。デスクトップの「VidNote Relay」または scripts/start-relay-tunnel.ps1 で cloudflared トンネルも起動し、Vercel の TRANSCRIPT_RELAY_URL を更新してください。"
-        : "PC で npm run relay と cloudflared を再起動し、Vercel の TRANSCRIPT_RELAY_URL を更新してください。";
+        ? "デスクトップの「VidNote Relay」または scripts/start-relay-tunnel.ps1 で cloudflared トンネルも起動してください。"
+        : "PC で VidNote Relay を再起動してください。";
     throw new Error(
       `リレー URL が無効か、トンネルが停止しています（HTTP ${res.status}）。${hint}`,
     );
   }
+
+  const raw = lastRaw;
+  const res = { ok: lastStatus >= 200 && lastStatus < 300, status: lastStatus };
 
   let data: {
     transcript?: string;
@@ -182,9 +219,10 @@ export async function fetchTranscriptServer(
   videoId: string,
   youtubeUrl = youtubeWatchUrl(videoId),
 ): Promise<TranscriptServerResult> {
-  if (process.env.TRANSCRIPT_RELAY_URL?.trim()) {
+  const relayUrl = await resolveRelayUrl();
+  if (relayUrl) {
     try {
-      return await fetchViaRelay(videoId);
+      return await fetchViaRelay(videoId, relayUrl);
     } catch (relayErr) {
       const message =
         relayErr instanceof Error ? relayErr.message : String(relayErr);
@@ -194,7 +232,7 @@ export async function fetchTranscriptServer(
 
   if (isVercel()) {
     throw new Error(
-      "Vercel では TRANSCRIPT_RELAY_URL（自宅 PC リレー）の設定が必要です。README の「字幕リレー」を参照してください。",
+      "Vercel では字幕リレーが必要です。自宅 PC で VidNote Relay を起動するか、README の「固定 URL トンネル」を参照してください。",
     );
   }
 

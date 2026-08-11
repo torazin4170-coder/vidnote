@@ -13,6 +13,7 @@
     "db:init": "node scripts/db-init.mjs",
     "db:migrate-local": "node scripts/migrate-to-turso.mjs",
     "relay": "node scripts/transcript-relay.mjs",
+    "relay:register": "node scripts/register-relay-url.mjs",
     "diagram:open": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-vidnote-diagram.ps1",
     "diagram:shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-vidnote-diagram-shortcut.ps1",
     "diagram:preview": "npx --yes tsx scripts/preview-diagram-cli.ts",

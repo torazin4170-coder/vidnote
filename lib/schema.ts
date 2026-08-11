@@ -64,6 +64,7 @@ export const sessionSchema = z.object({
   transcriptRaw: z.string().nullable(),
   transcript: z.string().nullable(),
   summaryJson: summarySectionSchema.nullable(),
+  summaryHtml: z.string().nullable(),
   hasVisualExplainer: z.boolean(),
   visualExplainerHtml: z.string().nullable(),
   notesHtml: z.string().nullable(),
@@ -95,6 +96,7 @@ export type DbSessionRow = {
   transcript_raw: string | null;
   transcript: string | null;
   summary_json: string | null;
+  summary_html: string | null;
   has_visual_explainer?: number | boolean | null;
   visual_explainer_html?: string | null;
   notes_html: string | null;
@@ -136,6 +138,7 @@ export function rowToSession(row: DbSessionRow): Session {
     transcriptRaw: row.transcript_raw ?? null,
     transcript: row.transcript,
     summaryJson,
+    summaryHtml: row.summary_html != null ? String(row.summary_html) : null,
     hasVisualExplainer: Boolean(row.has_visual_explainer),
     visualExplainerHtml: null,
     notesHtml: row.notes_html,

@@ -4,6 +4,7 @@ import { YoutubeTranscript } from "youtube-transcript";
 import { youtubeItemsToTranscript } from "./transcript-format.mjs";
 
 const PORT = Number(process.env.TRANSCRIPT_RELAY_PORT ?? 8787);
+const HOST = process.env.TRANSCRIPT_RELAY_HOST?.trim() || "127.0.0.1";
 const SECRET = process.env.TRANSCRIPT_RELAY_SECRET?.trim() ?? "";
 
 async function fetchTranscript(videoId) {
@@ -52,6 +53,12 @@ function readBody(req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  if (req.method === "GET" && req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
   if (req.method !== "POST" || req.url !== "/transcript") {
     res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify({ error: "Not found" }));
@@ -98,8 +105,9 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`VidNote transcript relay listening on http://127.0.0.1:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`VidNote transcript relay listening on http://${HOST}:${PORT}`);
+  console.log("GET  /health");
   console.log("POST /transcript  { \"videoId\": \"xxxxxxxxxxx\" }");
   if (SECRET) console.log("Authorization: Bearer <TRANSCRIPT_RELAY_SECRET>");
 });

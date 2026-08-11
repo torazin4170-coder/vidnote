@@ -1,4 +1,4 @@
-export type GeminiOperation = "polish" | "summary" | "diagram";
+export type GeminiOperation = "polish" | "summary" | "diagram" | "critical";
 
 export type GeminiCallContext = {
   sessionId?: string;

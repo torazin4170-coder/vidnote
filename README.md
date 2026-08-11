@@ -127,32 +127,51 @@ npm run db:migrate-local
 
 YouTube はクラウド（Vercel）からの字幕リクエストを拒否します。自宅 PC でリレーを動かし、Vercel からそこ経由で字幕を取得します。
 
-**1. 自宅 PC でリレーを起動**
+#### 方式 A: 固定 URL トンネル（常時本番・高頻度向け・推奨）
+
+**再起動のたびに Vercel を触る必要はありません。**
+
+1. [Cloudflare 無料アカウント](https://dash.cloudflare.com/sign-up)を作成
+2. ドメインを Cloudflare に追加（お持ちのドメイン、または Cloudflare で取得）
+3. 初回セットアップ（1回だけ）:
 
 ```powershell
 cd video-summary-app
-$env:TRANSCRIPT_RELAY_SECRET="任意の長い文字列"
-npm run relay
+.\scripts\setup-named-tunnel.ps1
 ```
 
-**2. インターネットからリレー URL を公開**
-
-[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) や ngrok 等で `http://127.0.0.1:8787` を公開し、HTTPS URL を取得します。
-
-例（cloudflared）:
+4. 日常の起動:
 
 ```powershell
-cloudflared tunnel --url http://127.0.0.1:8787
+.\scripts\start-named-relay-tunnel.ps1
 ```
 
-**3. Vercel の Environment Variables に追加**
+`TRANSCRIPT_RELAY_URL` はセットアップ時に Vercel へ **1回だけ** 設定されます（例: `https://relay.example.com`）。
 
-| 変数 | 例 |
-|------|-----|
-| `TRANSCRIPT_RELAY_URL` | `https://xxxx.trycloudflare.com` |
-| `TRANSCRIPT_RELAY_SECRET` | 手順 1 と同じ文字列 |
+#### 方式 B: クイックトンネル + URL 自動登録（暫定）
 
-**4. Vercel を再デプロイ**
+Cloudflare アカウント／ドメインがまだない間の運用用です。**Vercel の再デプロイは不要**（Relay 起動時に Turso へ URL 自動登録）。
+
+1. Vercel の `TRANSCRIPT_RELAY_URL` を **削除**（重要: 残っていると DB 登録より env が優先されます）
+2. Vercel に `TRANSCRIPT_RELAY_SECRET` を設定（自宅 PC と同じ値）
+3. 自宅 PC の `.env.local` に以下を設定:
+
+```
+VIDNOTE_APP_URL=https://vidnote-alpha.vercel.app
+TRANSCRIPT_RELAY_SECRET=vidnote-relay-2026
+```
+
+4. デスクトップの **VidNote Relay**（`scripts/start-relay-tunnel.ps1`）を起動
+
+> クイックトンネルの URL は再起動のたびに変わりますが、VidNote Relay が起動時に `/api/relay/register` へ自動登録します。
+
+#### 共通
+
+| 変数 | 設定場所 | 説明 |
+|------|----------|------|
+| `TRANSCRIPT_RELAY_SECRET` | Vercel + 自宅 PC | リレー認証（必須） |
+| `TRANSCRIPT_RELAY_URL` | Vercel のみ | **固定 URL 方式**でのみ設定（方式 A） |
+| `VIDNOTE_APP_URL` | 自宅 PC `.env.local` | 自動登録先（方式 B） |
 
 > ローカル版（`npm run dev`）ではリレー不要です。自宅回線から直接 YouTube にアクセスできます。
 
@@ -167,7 +186,7 @@ cloudflared tunnel --url http://127.0.0.1:8787
 | `TURSO_AUTH_TOKEN` | はい | Turso ダッシュボードの Auth Token |
 | `GEMINI_API_KEY` | はい | Google AI Studio の API キー |
 | `SITE_PASSWORD` | 推奨 | 公開 URL の簡易パスワード保護 |
-| `TRANSCRIPT_RELAY_URL` | Vercel 公開時 | 自宅 PC の字幕リレー URL |
+| `TRANSCRIPT_RELAY_URL` | 固定 URL 方式のみ | 名前付きトンネルの固定ホスト名（方式 A） |
 | `TRANSCRIPT_RELAY_SECRET` | 推奨 | リレー認証用共有秘密 |
 | `GEMINI_MODEL` | 任意 | 既定: `gemini-2.5-flash` |
 

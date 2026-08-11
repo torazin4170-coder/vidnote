@@ -16,6 +16,7 @@ const OPERATION_LABELS = {
   polish: "字幕校正",
   summary: "要点生成",
   diagram: "図解生成",
+  critical: "批判的視点",
 } as const;
 
 function formatCount(value: number): string {

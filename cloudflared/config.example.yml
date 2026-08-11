@@ -1,0 +1,14 @@
+# Cloudflare 名前付きトンネル（固定 URL）設定例
+# setup-named-tunnel.ps1 実行後に cloudflared/config.yml として生成されます。
+#
+# tunnel: VidNote で作成したトンネル ID または名前
+# credentials-file: cloudflared tunnel create で生成された JSON のパス
+# hostname: Cloudflare に登録した固定ホスト名（再起動しても変わらない）
+
+tunnel: vidnote-relay
+credentials-file: C:\Users\YOUR_USER\.cloudflared\TUNNEL_UUID.json
+
+ingress:
+  - hostname: relay.yourdomain.com
+    service: http://127.0.0.1:8787
+  - service: http_status:404

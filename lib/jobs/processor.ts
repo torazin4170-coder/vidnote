@@ -18,6 +18,7 @@ import {
   getGeminiRateLimitStatus,
 } from "@/lib/ai/gemini-rate-limit";
 import { appendSummarySectionsToNotes } from "@/lib/notes/append-summary-sections";
+import { buildSummaryDisplayHtml } from "@/lib/notes/summary-to-html";
 import { stripTranscriptFormatting } from "@/lib/rich-text/transcript-content";
 import { fetchTranscriptServer } from "@/lib/youtube/transcript-server";
 import { extractYoutubeId, youtubeWatchUrl } from "@/lib/youtube/parse-url";
@@ -150,6 +151,7 @@ async function processSession(sessionId: string): Promise<void> {
     const notesSource = await getSession(sessionId);
     await updateSession(sessionId, {
       summaryJson: JSON.stringify(summary),
+      summaryHtml: buildSummaryDisplayHtml(summary),
       notesHtml: appendSummarySectionsToNotes(
         notesSource?.notesHtml,
         summary,
@@ -192,6 +194,7 @@ export async function summarizeSession(sessionId: string): Promise<void> {
     );
     await updateSession(sessionId, {
       summaryJson: JSON.stringify(summary),
+      summaryHtml: buildSummaryDisplayHtml(summary),
       notesHtml: appendSummarySectionsToNotes(session.notesHtml, summary),
       status: "done",
       errorMessage: null,
@@ -341,6 +344,7 @@ export async function generateDiagramSession(
         title,
         summary: session.summaryJson,
         transcriptExcerpt,
+        notesHtml: session.notesHtml,
       },
       { sessionId },
     );

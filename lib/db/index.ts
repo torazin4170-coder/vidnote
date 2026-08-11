@@ -52,6 +52,7 @@ const MIGRATION_STATEMENTS = [
   `ALTER TABLE sessions ADD COLUMN category_id TEXT`,
   `ALTER TABLE sessions ADD COLUMN transcript_raw TEXT`,
   `ALTER TABLE sessions ADD COLUMN visual_explainer_html TEXT`,
+  `ALTER TABLE sessions ADD COLUMN summary_html TEXT`,
 ] as const;
 
 const POST_MIGRATION_STATEMENTS = [

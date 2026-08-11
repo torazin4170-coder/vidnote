@@ -10,6 +10,7 @@ import { ThemeToggle } from "@/components/workspace/ThemeToggle";
 import { GeminiUsagePanel } from "@/components/workspace/GeminiUsagePanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -60,8 +61,13 @@ export function GlobalHeader({
 }: GlobalHeaderProps) {
   const title = session?.title ?? "セッション未選択";
   const [polishTranscript, setPolishTranscript] = useState(true);
+  const [summaryCustomPrompt, setSummaryCustomPrompt] = useState("");
+  const [summaryCustomPromptDraft, setSummaryCustomPromptDraft] = useState("");
+  const [summaryCustomPromptMaxLength, setSummaryCustomPromptMaxLength] =
+    useState(2000);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [summaryPromptSaving, setSummaryPromptSaving] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -70,9 +76,22 @@ export function GlobalHeader({
       try {
         const res = await fetch("/api/settings", { credentials: "include" });
         if (!res.ok) return;
-        const data = (await res.json()) as { polishTranscript?: boolean };
-        if (!cancelled && typeof data.polishTranscript === "boolean") {
-          setPolishTranscript(data.polishTranscript);
+        const data = (await res.json()) as {
+          polishTranscript?: boolean;
+          summaryCustomPrompt?: string;
+          summaryCustomPromptMaxLength?: number;
+        };
+        if (!cancelled) {
+          if (typeof data.polishTranscript === "boolean") {
+            setPolishTranscript(data.polishTranscript);
+          }
+          if (typeof data.summaryCustomPrompt === "string") {
+            setSummaryCustomPrompt(data.summaryCustomPrompt);
+            setSummaryCustomPromptDraft(data.summaryCustomPrompt);
+          }
+          if (typeof data.summaryCustomPromptMaxLength === "number") {
+            setSummaryCustomPromptMaxLength(data.summaryCustomPromptMaxLength);
+          }
         }
       } finally {
         if (!cancelled) setSettingsLoading(false);
@@ -107,6 +126,36 @@ export function GlobalHeader({
       }
     } finally {
       setSettingsSaving(false);
+    }
+  };
+
+  const summaryPromptDirty =
+    summaryCustomPromptDraft.trim() !== summaryCustomPrompt.trim();
+
+  const saveSummaryCustomPrompt = async () => {
+    if (!geminiConfigured || summaryPromptSaving) return;
+    setSummaryPromptSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ summaryCustomPrompt: summaryCustomPromptDraft }),
+      });
+      const data = (await res.json()) as {
+        summaryCustomPrompt?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        alert(data.error ?? "設定の更新に失敗しました");
+        return;
+      }
+      if (typeof data.summaryCustomPrompt === "string") {
+        setSummaryCustomPrompt(data.summaryCustomPrompt);
+        setSummaryCustomPromptDraft(data.summaryCustomPrompt);
+      }
+    } finally {
+      setSummaryPromptSaving(false);
     }
   };
 
@@ -210,6 +259,45 @@ export function GlobalHeader({
                         ? "ON — 自動校正する"
                         : "OFF — 原文のまま"}
                   </Button>
+                </div>
+              ) : null}
+              {geminiConfigured ? (
+                <div className="flex flex-col gap-2">
+                  <span className="font-medium">要約のカスタム指示</span>
+                  <p className="text-muted-foreground">
+                    要点生成時に AI へ追加する指示です。新規処理と「再要約」に適用されます。
+                    空欄の場合はデフォルトの要約ルールのみ使います。
+                  </p>
+                  <Textarea
+                    value={summaryCustomPromptDraft}
+                    onChange={(e) => setSummaryCustomPromptDraft(e.target.value)}
+                    placeholder={
+                      "例: ビジネス視点で要約する / 専門用語は平易に / アクションは3件以内"
+                    }
+                    rows={5}
+                    maxLength={summaryCustomPromptMaxLength}
+                    disabled={settingsLoading || summaryPromptSaving}
+                    className="min-h-28 text-sm"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {summaryCustomPromptDraft.length.toLocaleString("ja-JP")} /{" "}
+                      {summaryCustomPromptMaxLength.toLocaleString("ja-JP")} 文字
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={summaryPromptDirty ? "default" : "outline"}
+                      disabled={
+                        settingsLoading ||
+                        summaryPromptSaving ||
+                        !summaryPromptDirty
+                      }
+                      onClick={() => void saveSummaryCustomPrompt()}
+                    >
+                      {summaryPromptSaving ? "保存中…" : "指示を保存"}
+                    </Button>
+                  </div>
                 </div>
               ) : null}
               {geminiConfigured ? (

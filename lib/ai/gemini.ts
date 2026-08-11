@@ -2,12 +2,14 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 import { assembleVisualExplainerHtml } from "@/lib/visual-explainer/assemble";
 import { fixChartBarScales } from "@/lib/visual-explainer/fix-chart-bars";
+import { notesHtmlToPlainExcerpt } from "@/lib/visual-explainer/notes-for-diagram";
 import type { GeminiCallContext } from "@/lib/ai/gemini-usage-types";
 import {
   GeminiDailyQuotaExceededError,
   waitForGeminiSlot,
 } from "@/lib/ai/gemini-rate-limit";
 import { recordGeminiUsage } from "@/lib/db/gemini-usage";
+import { getSummaryCustomPrompt } from "@/lib/db/settings";
 import {
   summarySectionSchema,
   type SummarySections,
@@ -70,6 +72,13 @@ frameworkViews は図解生成の**参考メモ**（UI非表示）。**無理に
 - approach は decompose | structure | essence | perspective のいずれか
 - 動画にない内容を創作しない。字幕に基づく
 
+## セクション間の役割分担（重複を避ける）
+- overview: 動画全体の主旨・結論を2〜4文で述べる（箇条書きの言い回しをそのまま繰り返さない）
+- keyPoints: 具体的な論点・事実・手順・根拠を箇条書き（overview の要約文を言い換えただけにしない）
+- actions: 学習者が**次に取るべき行動・実践ステップ**のみ（keyPoints の再掲や同義語の言い換えにしない）
+- 同じ事実を複数セクションに載せる場合は、**視点・粒度・表現を変える**（例: overview=結論、keyPoints=根拠、actions=実践）
+- 意味や事実を歪めない範囲で表現を変える。無理に言い換えるより、**載せる情報を分ける**ことを優先する
+
 必ず次の JSON 形式のみを返してください。Markdown や説明文は不要です。
 
 {
@@ -90,6 +99,37 @@ frameworkViews は図解生成の**参考メモ**（UI非表示）。**無理に
 文字起こし:
 `;
 
+const CRITICAL_THINKING_EXCERPT_LIMIT = 16_000;
+
+const CRITICAL_THINKING_PROMPT = `あなたは批判的思考（クリティカルシンキング）のコーチだ。
+YouTube 動画の内容を鵜呑みにせず、論理・根拠・前提を検証する視点で分析せよ。
+
+## 目的
+学習者が「何が強く、何が弱いか」を自分で判断できるよう、建設的な批判を書く。
+人格攻撃・陰口・根拠のない断定は禁止。
+
+## 文体（厳守）
+- 「です・ます・でしょう・ください」調は禁止。だ・である調、体言止め、簡潔な言い切りを使う
+- 1文は短く。40字を超える場合は意味の切れ目で改行する（空行または箇条書き内の改行）
+- 冗長な接続詞・丁寧語を避ける
+
+## 分析の観点（該当がなければ「特になし」と1行で明記）
+1. 構造的欠陥 — 論理の飛躍、因果の逆転、一般化のしすぎ、サンプル数不足、選択バイアス
+2. 矛盾点 — 発言同士・前提と結論・数値や定義の食い違い
+3. 脆弱な点 — 根拠が弱い主張、検証不能な断言、反例がありうる箇所、反論を想定していない点
+
+## 出力形式（厳守）
+- プレーンテキストのみ（Markdown の \`\`\` や HTML は不要）
+- 見出しは次の4つをこの順で必ず出力: \`## 構造的欠陥\` \`## 矛盾点\` \`## 脆弱な点\` \`## 総評\`
+- 各見出しの直後は空行を1行入れる
+- 構造的欠陥・矛盾点・脆弱な点は \`- \` 始まりの箇条書き（1項目1文が基本。長い場合は項目内で改行）
+- 各セクション 0〜4 項目。無理に埋めない
+- 総評は箇条書きにせず、2〜3文の短い段落。文ごとに改行してよい
+- 指摘は「動画内のどの主張・根拠」に対するものか、可能な限り具体的に
+
+## 入力
+`;
+
 const VISUAL_EXPLAINER_PROMPT = `あなたは図解 HTML を生成するアシスタントです。
 YouTube 動画の要点を、初めて聞く人にもわかる高品質な図解ページの <main> 内コンテンツとして出力してください。
 
@@ -100,6 +140,7 @@ YouTube 動画の要点を、初めて聞く人にもわかる高品質な図解
 - 絵文字禁止。React / shadcn 禁止。インタラクティブ要素禁止
 - 追加の <script> 禁止。外部画像 URL 禁止
 - 日本語で書く。概論→各論。専門用語は初出で平易に解説
+- マイノート（学習者の整理）が入力に含まれる場合は、AI 要点と矛盾する箇所はマイノートを優先して図解に反映する
 
 ## 構造的整理（frameworkViews）— 参考材料（テンプレ強制しない）
 \`frameworkViews\` があれば **図解の設計ヒント** として参照する。フレームワーク名（5W1H・マトリクス等）を見出しにそのまま出す必要はない。
@@ -386,6 +427,7 @@ function buildVisualExplainerSource(input: {
   title: string;
   summary: SummarySections;
   transcriptExcerpt?: string | null;
+  notesHtml?: string | null;
 }): string {
   const { frameworkViews, ...displaySummary } = input.summary;
   const summaryBlock = JSON.stringify(displaySummary, null, 2);
@@ -393,11 +435,15 @@ function buildVisualExplainerSource(input: {
     frameworkViews.length > 0
       ? `\n\n構造的整理（frameworkViews）— 図解レイアウトの参考。テンプレ名の表示は不要。内容に合うパターンへ変換すること:\n${JSON.stringify(frameworkViews, null, 2)}`
       : "";
+  const notesExcerpt = notesHtmlToPlainExcerpt(input.notesHtml);
+  const notesBlock = notesExcerpt
+    ? `\n\nマイノート（学習者の整理。要点と矛盾する場合はマイノートを優先しつつ統合）:\n${notesExcerpt}`
+    : "";
   const transcriptBlock = input.transcriptExcerpt?.trim()
     ? `\n\n字幕（参考・先頭 ${TRANSCRIPT_EXCERPT_LIMIT.toLocaleString()} 文字まで）:\n${input.transcriptExcerpt.trim()}`
     : "";
 
-  return `タイトル: ${input.title}\n\n要点 JSON:\n${summaryBlock}${frameworkBlock}${transcriptBlock}`;
+  return `タイトル: ${input.title}\n\n要点 JSON:\n${summaryBlock}${frameworkBlock}${notesBlock}${transcriptBlock}`;
 }
 
 export async function generateVisualExplainer(
@@ -405,6 +451,7 @@ export async function generateVisualExplainer(
     title: string;
     summary: SummarySections;
     transcriptExcerpt?: string | null;
+    notesHtml?: string | null;
   },
   context?: Pick<GeminiCallContext, "sessionId">,
 ): Promise<string> {
@@ -631,15 +678,26 @@ async function generateWithModelRetry(
   throw lastError ?? new Error("Gemini API 呼び出しに失敗しました");
 }
 
+function buildSummaryPrompt(customPrompt?: string | null): string {
+  const trimmed = customPrompt?.trim();
+  if (!trimmed) return SUMMARY_PROMPT;
+  return SUMMARY_PROMPT.replace(
+    "## 出力ルール",
+    `## ユーザー追加指示\n${trimmed}\n\n## 出力ルール`,
+  );
+}
+
 async function generateSummaryWithModel(
   modelName: string,
   transcript: string,
   usage?: Pick<GeminiCallContext, "sessionId">,
 ): Promise<SummarySections> {
   try {
+    const customPrompt = await getSummaryCustomPrompt();
+    const prompt = buildSummaryPrompt(customPrompt);
     const text = await generateWithModelRetry(
       modelName,
-      SUMMARY_PROMPT + transcript,
+      prompt + transcript,
       {
         json: true,
         usage: { sessionId: usage?.sessionId, operation: "summary" },
@@ -776,4 +834,60 @@ export async function summarizeTranscript(
     summarizeChunk(chunk, context),
   );
   return mergeSummaries(partials);
+}
+
+function buildCriticalThinkingSource(input: {
+  title: string;
+  summary: SummarySections | null;
+  transcript: string;
+  notesPlain?: string | null;
+}): string {
+  const transcriptExcerpt = input.transcript.slice(0, CRITICAL_THINKING_EXCERPT_LIMIT);
+  const summaryBlock = input.summary
+    ? `\n\nAI 要点（参考）:\n${JSON.stringify(input.summary, null, 2)}`
+    : "";
+  const notesBlock = input.notesPlain?.trim()
+    ? `\n\nマイノート（学習者のメモ・参考）:\n${input.notesPlain.trim().slice(0, 4_000)}`
+    : "";
+
+  return `タイトル: ${input.title}${summaryBlock}${notesBlock}\n\n文字起こし（抜粋）:\n${transcriptExcerpt}`;
+}
+
+export async function generateCriticalThinkingNotes(
+  input: {
+    title: string;
+    summary: SummarySections | null;
+    transcript: string;
+    notesPlain?: string | null;
+  },
+  context?: Pick<GeminiCallContext, "sessionId">,
+): Promise<string> {
+  const source = buildCriticalThinkingSource(input);
+  const models = getModelCandidates();
+  let lastError: Error | null = null;
+  const usageContext: GeminiCallContext = {
+    sessionId: context?.sessionId,
+    operation: "critical",
+  };
+
+  for (const modelName of models) {
+    try {
+      const text = await generateWithModelRetry(
+        modelName,
+        CRITICAL_THINKING_PROMPT + source,
+        { usage: usageContext },
+      );
+      if (!text.trim()) {
+        throw new Error("批判的視点の生成結果が空でした");
+      }
+      return text.trim();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (!isRetryableGeminiError(err)) {
+        throw new Error(friendlyGeminiError(err));
+      }
+    }
+  }
+
+  throw new Error(friendlyGeminiError(lastError));
 }

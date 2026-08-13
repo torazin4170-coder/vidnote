@@ -484,7 +484,7 @@ export async function generateVisualExplainer(
       });
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (!isRetryableGeminiError(err)) {
+      if (!shouldTryNextModel(err)) {
         throw new Error(friendlyGeminiError(err));
       }
     }
@@ -495,9 +495,15 @@ export async function generateVisualExplainer(
 
 const DEFAULT_FALLBACK_MODELS = [
   "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-2.0-flash-lite",
+  "gemini-2.5-flash-lite",
 ];
+
+const DEPRECATED_MODELS = new Set([
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-001",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash-lite-001",
+]);
 
 function getApiKey(): string {
   const key = process.env.GEMINI_API_KEY?.trim();
@@ -516,7 +522,7 @@ function getModelCandidates(): string[] {
     .map((m) => m.trim())
     .filter(Boolean);
   const chain = [primary, ...extras, ...DEFAULT_FALLBACK_MODELS];
-  return [...new Set(chain)];
+  return [...new Set(chain)].filter((model) => !DEPRECATED_MODELS.has(model));
 }
 
 function extractJson(text: string): string {
@@ -541,6 +547,20 @@ function isRetryableGeminiError(err: unknown): boolean {
   );
 }
 
+function isModelUnavailableError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    message.includes("404") ||
+    message.includes("not found") ||
+    message.includes("no longer available") ||
+    message.includes("is not supported for generateContent")
+  );
+}
+
+function shouldTryNextModel(err: unknown): boolean {
+  return isRetryableGeminiError(err) || isModelUnavailableError(err);
+}
+
 export function friendlyGeminiError(err: unknown): string {
   if (err instanceof GeminiDailyQuotaExceededError) {
     return err.message;
@@ -562,6 +582,10 @@ export function friendlyGeminiError(err: unknown): string {
 
   if (message.includes("API key not valid") || message.includes("API_KEY_INVALID")) {
     return "GEMINI_API_KEY が無効です。Google AI Studio でキーを確認してください。";
+  }
+
+  if (isModelUnavailableError(err)) {
+    return "指定の Gemini モデルは利用できません。GEMINI_MODEL を gemini-2.5-flash に更新してください（2.0 系は廃止済み）。";
   }
 
   return message.replace(/^\[GoogleGenerativeAI Error\]:\s*/, "");
@@ -657,7 +681,8 @@ async function generateWithModelRetry(
         throw err;
       }
       const retryable = isRetryableGeminiError(err);
-      const isLastAttempt = attempt >= 2 || !retryable;
+      const isLastAttempt =
+        attempt >= 2 || !retryable || isModelUnavailableError(err);
       if (options?.usage && isLastAttempt) {
         await logGeminiUsage({
           ...options.usage,
@@ -732,7 +757,7 @@ async function summarizeChunk(
       return await generateSummaryWithModel(modelName, transcript, usage);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (!isRetryableGeminiError(err)) {
+      if (!shouldTryNextModel(err)) {
         throw new Error(friendlyGeminiError(err));
       }
     }
@@ -776,7 +801,7 @@ async function polishChunk(
       return await polishChunkWithModel(modelName, transcript, usage);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (!isRetryableGeminiError(err)) {
+      if (!shouldTryNextModel(err)) {
         throw new Error(friendlyGeminiError(err));
       }
     }
@@ -883,7 +908,7 @@ export async function generateCriticalThinkingNotes(
       return text.trim();
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (!isRetryableGeminiError(err)) {
+      if (!shouldTryNextModel(err)) {
         throw new Error(friendlyGeminiError(err));
       }
     }

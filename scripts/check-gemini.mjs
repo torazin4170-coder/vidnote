@@ -31,7 +31,7 @@ function loadEnvLocal() {
 loadEnvLocal();
 
 const apiKey = process.env.GEMINI_API_KEY?.trim();
-const modelName = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+const modelName = process.env.GEMINI_MODEL?.trim() || "gemini-3.5-flash";
 
 if (!apiKey) {
   console.error("❌ GEMINI_API_KEY が未設定です。");

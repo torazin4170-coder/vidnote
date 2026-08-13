@@ -484,18 +484,24 @@ export async function generateVisualExplainer(
       });
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (!shouldTryNextModel(err)) {
-        throw new Error(friendlyGeminiError(err));
+      if (shouldTryNextModel(err)) {
+        console.warn(
+          `[gemini] diagram model ${modelName} unavailable, trying next:`,
+          lastError.message,
+        );
+        continue;
       }
+      throw new Error(friendlyGeminiError(err));
     }
   }
 
-  throw new Error(friendlyGeminiError(lastError));
+  throw new Error(formatModelChainFailure(models, lastError));
 }
 
 const DEFAULT_FALLBACK_MODELS = [
+  "gemini-3.5-flash",
   "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
+  "gemini-3.1-flash-lite",
 ];
 
 const DEPRECATED_MODELS = new Set([
@@ -503,6 +509,10 @@ const DEPRECATED_MODELS = new Set([
   "gemini-2.0-flash-001",
   "gemini-2.0-flash-lite",
   "gemini-2.0-flash-lite-001",
+  "gemini-2.0-flash-lite-preview",
+  "gemini-2.0-flash-lite-preview-02-05",
+  "gemini-2.0-flash-exp",
+  "gemini-2.0-pro-exp",
 ]);
 
 function getApiKey(): string {
@@ -516,13 +526,33 @@ function getApiKey(): string {
 }
 
 function getModelCandidates(): string[] {
-  const primary = process.env.GEMINI_MODEL?.trim() || DEFAULT_FALLBACK_MODELS[0]!;
+  let primary = process.env.GEMINI_MODEL?.trim() || DEFAULT_FALLBACK_MODELS[0]!;
+  if (DEPRECATED_MODELS.has(primary)) {
+    primary = DEFAULT_FALLBACK_MODELS[0]!;
+  }
   const extras = (process.env.GEMINI_FALLBACK_MODELS ?? "")
     .split(",")
     .map((m) => m.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((model) => !DEPRECATED_MODELS.has(model));
   const chain = [primary, ...extras, ...DEFAULT_FALLBACK_MODELS];
   return [...new Set(chain)].filter((model) => !DEPRECATED_MODELS.has(model));
+}
+
+function formatModelChainFailure(
+  models: string[],
+  lastError: unknown,
+): string {
+  const detail =
+    lastError instanceof Error ? lastError.message : String(lastError);
+  const cleaned = detail.replace(/^\[GoogleGenerativeAI Error\]:\s*/, "");
+  const tried = models.join(", ");
+
+  if (isModelUnavailableError(lastError)) {
+    return `利用可能な Gemini モデルが見つかりません（試行: ${tried}）。Vercel の GEMINI_MODEL を gemini-3.5-flash に更新し、API キーが有効か確認してください。詳細: ${cleaned}`;
+  }
+
+  return friendlyGeminiError(lastError);
 }
 
 function extractJson(text: string): string {
@@ -585,7 +615,7 @@ export function friendlyGeminiError(err: unknown): string {
   }
 
   if (isModelUnavailableError(err)) {
-    return "指定の Gemini モデルは利用できません。GEMINI_MODEL を gemini-2.5-flash に更新してください（2.0 系は廃止済み）。";
+    return "指定の Gemini モデルは利用できません。GEMINI_MODEL を gemini-3.5-flash に更新してください（2.0 系は廃止済み）。";
   }
 
   return message.replace(/^\[GoogleGenerativeAI Error\]:\s*/, "");
@@ -757,13 +787,18 @@ async function summarizeChunk(
       return await generateSummaryWithModel(modelName, transcript, usage);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (!shouldTryNextModel(err)) {
-        throw new Error(friendlyGeminiError(err));
+      if (shouldTryNextModel(err)) {
+        console.warn(
+          `[gemini] summarize model ${modelName} failed, trying next:`,
+          lastError.message,
+        );
+        continue;
       }
+      throw new Error(friendlyGeminiError(err));
     }
   }
 
-  throw new Error(friendlyGeminiError(lastError));
+  throw new Error(formatModelChainFailure(models, lastError));
 }
 
 function mergeSummaries(parts: SummarySections[]): SummarySections {
@@ -801,13 +836,18 @@ async function polishChunk(
       return await polishChunkWithModel(modelName, transcript, usage);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (!shouldTryNextModel(err)) {
-        throw new Error(friendlyGeminiError(err));
+      if (shouldTryNextModel(err)) {
+        console.warn(
+          `[gemini] polish model ${modelName} failed, trying next:`,
+          lastError.message,
+        );
+        continue;
       }
+      throw new Error(friendlyGeminiError(err));
     }
   }
 
-  throw new Error(friendlyGeminiError(lastError));
+  throw new Error(formatModelChainFailure(models, lastError));
 }
 
 function splitTranscriptChunks(transcript: string): string[] {
@@ -908,11 +948,16 @@ export async function generateCriticalThinkingNotes(
       return text.trim();
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (!shouldTryNextModel(err)) {
-        throw new Error(friendlyGeminiError(err));
+      if (shouldTryNextModel(err)) {
+        console.warn(
+          `[gemini] critical model ${modelName} failed, trying next:`,
+          lastError.message,
+        );
+        continue;
       }
+      throw new Error(friendlyGeminiError(err));
     }
   }
 
-  throw new Error(friendlyGeminiError(lastError));
+  throw new Error(formatModelChainFailure(models, lastError));
 }

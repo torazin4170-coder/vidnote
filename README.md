@@ -109,7 +109,7 @@ npm run db:migrate-local
 | `TURSO_DATABASE_URL` | Turso DB URL（`libsql://...`）。未設定時はローカルファイル |
 | `TURSO_AUTH_TOKEN` | Turso 認証トークン（クラウド接続時に必要） |
 | `GEMINI_API_KEY` | Google AI Studio の API キー（要約に必要） |
-| `GEMINI_MODEL` | モデル ID（既定: `gemini-2.5-flash`） |
+| `GEMINI_MODEL` | モデル ID（既定: `gemini-3.5-flash`） |
 | `YTDLP_PATH` | yt-dlp 実行ファイル（既定: `yt-dlp`・ローカルのみ） |
 | `YTDLP_COOKIES_BROWSER` | ブラウザ Cookie（`none` 推奨・ローカルのみ） |
 | `SITE_PASSWORD` | 公開時の簡易パスワード（未設定なら認証なし） |

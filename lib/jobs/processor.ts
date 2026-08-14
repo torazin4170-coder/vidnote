@@ -303,6 +303,53 @@ export async function reprocessSession(sessionId: string): Promise<void> {
   });
 }
 
+export async function refetchCaptionsSession(sessionId: string): Promise<void> {
+  const session = await getSession(sessionId);
+  if (!session) {
+    throw new Error("セッションが見つかりません");
+  }
+
+  const url = session.youtubeId
+    ? youtubeWatchUrl(session.youtubeId)
+    : session.youtubeUrl;
+  const videoId = session.youtubeId ?? extractYoutubeId(url);
+  if (!videoId) {
+    throw new Error("動画 ID が不正です");
+  }
+
+  const previousStatus = session.status;
+  const hadSummary = Boolean(session.summaryJson);
+
+  await updateSession(sessionId, {
+    status: "fetching_captions",
+    errorMessage: null,
+  });
+
+  try {
+    const captions = await fetchTranscriptServer(videoId, url);
+    const polished = await applyPolishIfEnabled(sessionId, captions.transcript);
+
+    await updateSession(sessionId, {
+      title: captions.title,
+      thumbnailUrl: captions.thumbnailUrl,
+      durationSec: captions.durationSec,
+      transcriptRaw: captions.transcript,
+      transcript: polished,
+      status: hadSummary ? "done" : "transcribed",
+      errorMessage: null,
+    });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "字幕の取得に失敗しました";
+    await updateSession(sessionId, {
+      status:
+        previousStatus === "error" || !hadSummary ? "error" : previousStatus,
+      errorMessage: message,
+    });
+    throw new Error(message);
+  }
+}
+
 export async function resummarizeSession(sessionId: string): Promise<void> {
   await summarizeSession(sessionId);
 }

@@ -618,6 +618,10 @@ export function friendlyGeminiError(err: unknown): string {
     return "指定の Gemini モデルは利用できません。GEMINI_MODEL を gemini-3.5-flash に更新してください（2.0 系は廃止済み）。";
   }
 
+  if (isSummaryJsonParseError(err)) {
+    return "AI の要約結果（JSON）の形式が不正でした。「要約を再生成」をもう一度試してください。";
+  }
+
   return message.replace(/^\[GoogleGenerativeAI Error\]:\s*/, "");
 }
 
@@ -733,6 +737,37 @@ async function generateWithModelRetry(
   throw lastError ?? new Error("Gemini API 呼び出しに失敗しました");
 }
 
+function isSummaryJsonParseError(err: unknown): boolean {
+  if (err instanceof SyntaxError) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    message.includes("JSON") ||
+    message.includes("Unexpected token") ||
+    message.includes("Expected ','") ||
+    message.includes("Expected ']'") ||
+    message.includes("Expected '}'")
+  );
+}
+
+function repairLooseJson(raw: string): string {
+  return raw.trim().replace(/,\s*([}\]])/g, "$1");
+}
+
+function parseSummaryResponse(text: string): SummarySections {
+  const raw = extractJson(text);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (firstErr) {
+    try {
+      parsed = JSON.parse(repairLooseJson(raw));
+    } catch {
+      throw firstErr instanceof Error ? firstErr : new Error(String(firstErr));
+    }
+  }
+  return summarySectionSchema.parse(parsed);
+}
+
 function buildSummaryPrompt(customPrompt?: string | null): string {
   const trimmed = customPrompt?.trim();
   if (!trimmed) return SUMMARY_PROMPT;
@@ -747,22 +782,34 @@ async function generateSummaryWithModel(
   transcript: string,
   usage?: Pick<GeminiCallContext, "sessionId">,
 ): Promise<SummarySections> {
-  try {
-    const customPrompt = await getSummaryCustomPrompt();
-    const prompt = buildSummaryPrompt(customPrompt);
-    const text = await generateWithModelRetry(
-      modelName,
-      prompt + transcript,
-      {
+  const customPrompt = await getSummaryCustomPrompt();
+  const basePrompt = buildSummaryPrompt(customPrompt) + transcript;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const prompt =
+        attempt === 0
+          ? basePrompt
+          : `${basePrompt}\n\n【再試行】前回の JSON が不正でした。配列・文字列のカンマ漏れなく、有効な JSON のみを返してください。`;
+      const text = await generateWithModelRetry(modelName, prompt, {
         json: true,
         usage: { sessionId: usage?.sessionId, operation: "summary" },
-      },
-    );
-    const parsed = JSON.parse(extractJson(text));
-    return summarySectionSchema.parse(parsed);
-  } catch (err) {
-    throw err instanceof Error ? err : new Error(String(err));
+      });
+      return parseSummaryResponse(text);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (!isSummaryJsonParseError(err) || attempt >= 2) {
+        throw lastError;
+      }
+      console.warn(
+        `[gemini] summary JSON parse failed (attempt ${attempt + 1}, model=${modelName}):`,
+        lastError.message,
+      );
+    }
   }
+
+  throw lastError ?? new Error("要約 JSON の解析に失敗しました");
 }
 
 async function polishChunkWithModel(

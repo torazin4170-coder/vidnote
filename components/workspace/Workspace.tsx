@@ -632,7 +632,7 @@ export function Workspace({
     applyOptimisticStatus(selectedSessionId, "fetching_captions");
     try {
       const { res, data } = await apiFetch(
-        `/api/sessions/${selectedSessionId}/process`,
+        `/api/sessions/${selectedSessionId}/process?action=refetch-captions`,
         { method: "POST" },
       );
       if (!res.ok) {

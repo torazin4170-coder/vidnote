@@ -5,6 +5,7 @@ import { sanitizeSessionForClient } from "@/lib/session-list";
 import {
   drainJobQueue,
   generateDiagramSession,
+  refetchCaptionsSession,
   reprocessSession,
   repolishSession,
   summarizeSession,
@@ -41,6 +42,11 @@ export async function POST(request: Request, context: RouteContext) {
       await repolishSession(id);
     } else if (action === "diagram" || action === "rediagram") {
       await generateDiagramSession(id);
+    } else if (action === "refetch-captions" || action === "refetch") {
+      await refetchCaptionsSession(id);
+    } else if (action === "reprocess") {
+      await reprocessSession(id);
+      await drainJobQueue();
     } else {
       await reprocessSession(id);
       await drainJobQueue();

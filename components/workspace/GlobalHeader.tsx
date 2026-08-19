@@ -265,8 +265,9 @@ export function GlobalHeader({
                 <div className="flex flex-col gap-2">
                   <span className="font-medium">要約のカスタム指示</span>
                   <p className="text-muted-foreground">
-                    要点生成時に AI へ追加する指示です。新規処理と「再要約」に適用されます。
-                    空欄の場合はデフォルトの要約ルールのみ使います。
+                    要点生成時に AI へ追加する指示です。新規処理と「要約を再生成」に適用されます。
+                    段落・改行・省略の指定は、既定の短い概要ルールより優先されます。
+                    既存の要約には自動では入りません。保存後に再生成してください。
                   </p>
                   <Textarea
                     value={summaryCustomPromptDraft}

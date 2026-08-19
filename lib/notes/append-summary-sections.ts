@@ -1,3 +1,4 @@
+import { textToHtmlInlineBreaks } from "@/lib/notes/format-summary-text";
 import { SUMMARY_SECTION_LABELS } from "@/lib/labels";
 import { escapeHtml } from "@/lib/rich-text/escape-html";
 import type { SummarySections } from "@/lib/schema";
@@ -7,10 +8,7 @@ export const AUTO_SUMMARY_MARKER = "<!-- vidnote:auto-summary -->";
 function buildListSection(title: string, items: string[]): string {
   if (items.length === 0) return "";
   const listItems = items
-    .map((item) => {
-      const inner = escapeHtml(item).replace(/\n/g, "<br>");
-      return `<li>${inner}</li>`;
-    })
+    .map((item) => `<li>${textToHtmlInlineBreaks(item)}</li>`)
     .join("");
   return `<h3>${escapeHtml(title)}</h3><ul>${listItems}</ul>`;
 }

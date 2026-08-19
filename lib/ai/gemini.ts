@@ -71,11 +71,12 @@ frameworkViews は図解生成の**参考メモ**（UI非表示）。**無理に
 - framework にはフレームワーク名（例: "MECE", "5W1H", "ファインマン"）
 - approach は decompose | structure | essence | perspective のいずれか
 - 動画にない内容を創作しない。字幕に基づく
-- **overview は段落ごとに \\n\\n で区切ってよい**（段落内の改行は \\n）。UI が自動的に段落タグに変換して表示する
-- keyPoints / actions の各要素も、説明が複数行になる場合は \\n で改行してよい
+- **ユーザー追加指示がある場合、文体・長さ・段落・省略ルールはそちらを優先**する（JSON のキー名と型だけは守る）
+- overview は壁打ちの1塊にしない。段落の区切りは JSON 文字列内に実際の改行2つ（\\n\\n）を入れる。番号付きポイントも項目の間に \\n\\n
+- keyPoints / actions の各要素も、説明が複数行になる場合は \\n または \\n\\n で改行する
 
 ## セクション間の役割分担（重複を避ける）
-- overview: 動画全体の主旨・結論を2〜4文で述べる（箇条書きの言い回しをそのまま繰り返さない）
+- overview: カスタム指示がなければ2〜4文。指示があればその長さ・段落構成に従う（箇条書きの言い回しをそのまま繰り返さない）
 - keyPoints: 具体的な論点・事実・手順・根拠を箇条書き（overview の要約文を言い換えただけにしない）
 - actions: 学習者が**次に取るべき行動・実践ステップ**のみ（keyPoints の再掲や同義語の言い換えにしない）
 - 同じ事実を複数セクションに載せる場合は、**視点・粒度・表現を変える**（例: overview=結論、keyPoints=根拠、actions=実践）
@@ -84,7 +85,7 @@ frameworkViews は図解生成の**参考メモ**（UI非表示）。**無理に
 必ず次の JSON 形式のみを返してください。Markdown や説明文は不要です。
 
 {
-  "overview": "2〜4文の概要",
+  "overview": "段落1\\n\\n段落2。番号付きなら\\n\\n1. 要点\\n\\n2. 要点",
   "keyPoints": ["重要ポイント1", "重要ポイント2"],
   "terms": [{ "term": "用語", "definition": "説明" }],
   "actions": ["学習者が取るべきアクション1"],
@@ -773,10 +774,13 @@ function parseSummaryResponse(text: string): SummarySections {
 function buildSummaryPrompt(customPrompt?: string | null): string {
   const trimmed = customPrompt?.trim();
   if (!trimmed) return SUMMARY_PROMPT;
-  return SUMMARY_PROMPT.replace(
-    "## 出力ルール",
-    `## ユーザー追加指示\n${trimmed}\n\n## 出力ルール`,
-  );
+  const block = `## ユーザー追加指示（文体・長さ・段落・省略はこちらを最優先。JSON のキー構成は変えない）
+${trimmed}
+
+段落・箇条書きの空行は、画面の余白になるよう JSON 文字列の中に \\n\\n として入れること（見た目の空白文字だけでは反映されない）。
+
+`;
+  return SUMMARY_PROMPT.replace("文字起こし:\n", `${block}文字起こし:\n`);
 }
 
 async function generateSummaryWithModel(

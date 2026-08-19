@@ -5,7 +5,7 @@ const SUMMARY_CUSTOM_PROMPT_KEY = "summary_custom_prompt";
 const TRANSCRIPT_RELAY_URL_KEY = "transcript_relay_url";
 const TRANSCRIPT_RELAY_UPDATED_AT_KEY = "transcript_relay_url_updated_at";
 
-export const SUMMARY_CUSTOM_PROMPT_MAX_LENGTH = 2000;
+export const SUMMARY_CUSTOM_PROMPT_MAX_LENGTH = 4000;
 
 export async function getPolishTranscriptEnabled(): Promise<boolean> {
   const db = await getDb();

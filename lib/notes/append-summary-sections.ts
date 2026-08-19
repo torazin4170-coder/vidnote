@@ -6,7 +6,12 @@ export const AUTO_SUMMARY_MARKER = "<!-- vidnote:auto-summary -->";
 
 function buildListSection(title: string, items: string[]): string {
   if (items.length === 0) return "";
-  const listItems = items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const listItems = items
+    .map((item) => {
+      const inner = escapeHtml(item).replace(/\n/g, "<br>");
+      return `<li>${inner}</li>`;
+    })
+    .join("");
   return `<h3>${escapeHtml(title)}</h3><ul>${listItems}</ul>`;
 }
 

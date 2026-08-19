@@ -71,6 +71,8 @@ frameworkViews は図解生成の**参考メモ**（UI非表示）。**無理に
 - framework にはフレームワーク名（例: "MECE", "5W1H", "ファインマン"）
 - approach は decompose | structure | essence | perspective のいずれか
 - 動画にない内容を創作しない。字幕に基づく
+- **overview は段落ごとに \\n\\n で区切ってよい**（段落内の改行は \\n）。UI が自動的に段落タグに変換して表示する
+- keyPoints / actions の各要素も、説明が複数行になる場合は \\n で改行してよい
 
 ## セクション間の役割分担（重複を避ける）
 - overview: 動画全体の主旨・結論を2〜4文で述べる（箇条書きの言い回しをそのまま繰り返さない）

@@ -50,7 +50,16 @@ function RateLimitBanner({ rateLimit }: { rateLimit: GeminiRateLimitStatus }) {
     <div className={cn("flex flex-col gap-2 rounded-lg border p-3", tone)}>
       <p className="text-sm font-medium">
         本日あと約{" "}
-        <span className="tabular-nums">
+        <span
+          className={cn(
+            "inline-flex min-w-[2.25rem] items-center justify-center rounded-md px-2.5 py-0.5 text-lg font-bold tabular-nums ring-1",
+            rateLimit.estimatedVideosRemainingToday === 0
+              ? "bg-destructive/15 text-destructive ring-destructive/30"
+              : rateLimit.estimatedVideosRemainingToday <= 2
+                ? "bg-accent/40 text-accent-foreground ring-accent/50"
+                : "bg-primary/15 text-primary ring-primary/30",
+          )}
+        >
           {formatCount(rateLimit.estimatedVideosRemainingToday)}
         </span>{" "}
         本処理可能

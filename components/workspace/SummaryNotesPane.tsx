@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ClipboardCopy,
   ExternalLink,
@@ -14,15 +14,11 @@ import {
 import type { Session } from "@/lib/schema";
 import { buildSummaryDisplayHtml } from "@/lib/notes/summary-to-html";
 import { htmlToPlainTranscript } from "@/lib/rich-text/transcript-content";
-import { loadPaneLayout, savePaneLayout } from "@/lib/pane-layout";
 import {
   buildVisualExplainerCopyText,
   type CopyPromptMode,
 } from "@/lib/visual-explainer/copy-prompt";
-import {
-  formatLongVideoThresholdMinutes,
-  recommendCursorDiagram,
-} from "@/lib/visual-explainer/diagram-policy";
+import { recommendCursorDiagram } from "@/lib/visual-explainer/diagram-policy";
 import { openVisualExplainerInNewTab } from "@/lib/visual-explainer/open-tab";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
@@ -89,46 +85,12 @@ export function SummaryNotesPane({
   onImportDiagram,
 }: SummaryNotesPaneProps) {
   const { resolvedTheme } = useTheme();
-  const [splitRatio, setSplitRatio] = useState(0.42);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [notesCopyFeedback, setNotesCopyFeedback] = useState<string | null>(null);
   const [isImportingDiagram, setIsImportingDiagram] = useState(false);
   const [isGeneratingCritical, setIsGeneratingCritical] = useState(false);
   const [notesEditorKey, setNotesEditorKey] = useState(0);
-  const [mobileSection, setMobileSection] = useState<"summary" | "notes">("summary");
-  const containerRef = useRef<HTMLDivElement>(null);
   const diagramFileInputRef = useRef<HTMLInputElement>(null);
-  const dragging = useRef(false);
-  const splitRatioRef = useRef(splitRatio);
-
-  useLayoutEffect(() => {
-    setSplitRatio(loadPaneLayout().summaryNotesSplitRatio);
-  }, []);
-
-  useEffect(() => {
-    splitRatioRef.current = splitRatio;
-  }, [splitRatio]);
-
-  const onMouseMove = useCallback((e: MouseEvent) => {
-    if (!dragging.current || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const ratio = (e.clientY - rect.top) / rect.height;
-    setSplitRatio(Math.min(0.7, Math.max(0.25, ratio)));
-  }, []);
-
-  const onMouseUp = useCallback(() => {
-    dragging.current = false;
-    savePaneLayout({ summaryNotesSplitRatio: splitRatioRef.current });
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-  }, [onMouseMove, onMouseUp]);
 
   useEffect(() => {
     if (!copyFeedback) return;
@@ -241,7 +203,6 @@ export function SummaryNotesPane({
 
   return (
     <div
-      ref={containerRef}
       className={cn(
         "flex min-h-0 min-w-0 w-full flex-1 flex-col bg-background md:min-w-[300px] md:border-l md:border-border",
         isMobile && "max-md:flex-1",
@@ -255,125 +216,133 @@ export function SummaryNotesPane({
         onChange={(event) => void handleImportDiagramFile(event)}
       />
 
-      {isMobile && (
-        <div className={cn("shrink-0 px-4 py-3", mobileUi.segment)}>
-          <button
-            type="button"
-            className={mobileUi.segmentItem(mobileSection === "summary")}
-            onClick={() => setMobileSection("summary")}
-          >
-            AI 要点
-          </button>
-          <button
-            type="button"
-            className={mobileUi.segmentItem(mobileSection === "notes")}
-            onClick={() => setMobileSection("notes")}
-          >
-            マイノート
-          </button>
-        </div>
-      )}
-
-      <div
-        className={cn(
-          "flex min-h-0 flex-col",
-          isMobile && mobileSection !== "summary" && "max-md:hidden",
-          isMobile ? "max-md:flex-1" : undefined,
-        )}
-        style={isMobile ? undefined : { flex: `${splitRatio} 1 0%` }}
-      >
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3 max-md:hidden md:flex">
-          <h2 className="text-sm font-medium">AI 要点</h2>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onResummarize}
-            disabled={!session?.transcript || isProcessing || !geminiConfigured}
-          >
-            <RefreshCw />
-            再生成
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  type="button"
-                  variant={preferCursorDiagram ? "default" : "ghost"}
-                  size="sm"
-                  disabled={!summary}
-                >
-                  <ClipboardCopy />
-                  Cursor 用にコピー
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => void handleCopyForExternal("cursor")}>
-                Cursor / 図解ツール向け
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void handleCopyForExternal("notebooklm")}>
-                NotebookLM 向け（要点のみ）
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  type="button"
-                  variant={hasVisualExplainer ? "default" : "ghost"}
-                  size="sm"
-                  disabled={!summary || isGeneratingDiagram}
-                >
-                  <ImageIcon />
-                  AI 図解
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="start">
-              {hasVisualExplainer && !isGeneratingDiagram && (
-                <DropdownMenuItem onClick={handleOpenDiagramTab}>
-                  <ExternalLink />
-                  新しいタブで開く
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                disabled={isImportingDiagram}
-                onClick={() => diagramFileInputRef.current?.click()}
+      <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+        <h2 className="text-sm font-medium">AI 要点 / マイノート</h2>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onResummarize}
+          disabled={!session?.transcript || isProcessing || !geminiConfigured}
+        >
+          <RefreshCw />
+          再生成
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                type="button"
+                variant={preferCursorDiagram ? "default" : "ghost"}
+                size="sm"
+                disabled={!summary}
               >
-                <Upload />
-                {hasVisualExplainer ? "HTML を再取り込み" : "HTML を取り込む"}
+                <ClipboardCopy />
+                Cursor 用にコピー
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => void handleCopyForExternal("cursor")}>
+              Cursor / 図解ツール向け
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void handleCopyForExternal("notebooklm")}>
+              NotebookLM 向け（要点のみ）
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                type="button"
+                variant={hasVisualExplainer ? "default" : "ghost"}
+                size="sm"
+                disabled={!summary || isGeneratingDiagram}
+              >
+                <ImageIcon />
+                AI 図解
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="start">
+            {hasVisualExplainer && !isGeneratingDiagram && (
+              <DropdownMenuItem onClick={handleOpenDiagramTab}>
+                <ExternalLink />
+                新しいタブで開く
               </DropdownMenuItem>
-              {!preferCursorDiagram && !hasVisualExplainer && (
+            )}
+            <DropdownMenuItem
+              disabled={isImportingDiagram}
+              onClick={() => diagramFileInputRef.current?.click()}
+            >
+              <Upload />
+              {hasVisualExplainer ? "HTML を再取り込み" : "HTML を取り込む"}
+            </DropdownMenuItem>
+            {!preferCursorDiagram && !hasVisualExplainer && (
+              <DropdownMenuItem
+                disabled={!canGenerateDiagram}
+                onClick={onGenerateDiagram}
+              >
+                <ImageIcon />
+                VidNote 内で図解を生成
+              </DropdownMenuItem>
+            )}
+            {hasVisualExplainer && (
+              <>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   disabled={!canGenerateDiagram}
-                  onClick={onGenerateDiagram}
+                  onClick={onRediagram}
                 >
-                  <ImageIcon />
-                  VidNote 内で図解を生成
+                  <RefreshCw />
+                  図解を再生成
                 </DropdownMenuItem>
-              )}
-              {hasVisualExplainer && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    disabled={!canGenerateDiagram}
-                    onClick={onRediagram}
-                  >
-                    <RefreshCw />
-                    図解を再生成
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {copyFeedback && (
-            <span className="text-xs text-muted-foreground">{copyFeedback}</span>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={!canGenerateCritical}
+          onClick={() => void handleGenerateCriticalThinking()}
+        >
+          <ScanSearch />
+          {isGeneratingCritical ? "分析中…" : "批判的視点"}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="ml-auto"
+          disabled={!session?.notesHtml?.trim() || !bodiesReady}
+          onClick={() => void handleCopyNotes()}
+          aria-label="マイノートを全文コピー"
+        >
+          <ClipboardCopy />
+        </Button>
+        {(copyFeedback || notesCopyFeedback) && (
+          <span className="w-full text-xs text-muted-foreground md:w-auto">
+            {copyFeedback ?? notesCopyFeedback}
+          </span>
+        )}
+      </div>
+
+      <ScrollArea className="min-h-0 flex-1">
+        <div
+          className={cn(
+            "flex flex-col gap-6 p-3",
+            mobileUi.paneBody,
+            isMobile && "max-md:gap-8 max-md:p-4",
           )}
-        </div>
-        <ScrollArea className="min-h-0 flex-1">
-          <div className={cn("flex flex-col gap-3 p-3", mobileUi.paneBody, isMobile && "max-md:gap-4 max-md:p-4")}>
+        >
+          <section className="flex flex-col gap-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              AI 要点
+            </h3>
+
             {!geminiConfigured && (
               <p className="text-sm text-muted-foreground">
                 GEMINI_API_KEY 未設定のため、字幕取得のみ利用できます。
@@ -396,39 +365,12 @@ export function SummaryNotesPane({
                 showFixedToolbar
                 showHistory
                 className="vidnote-mobile-editor"
-                minHeightClassName="min-h-[120px] max-md:min-h-[40vh]"
+                minHeightClassName="min-h-[120px] max-md:min-h-[30vh]"
               />
             )}
 
             {summary && !bodiesReady && (
               <Skeleton className="h-[120px] w-full" />
-            )}
-
-            {summary && !hasVisualExplainer && !isGeneratingDiagram && (
-              <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 text-sm">
-                <p className="font-medium">図解（任意）</p>
-                {preferCursorDiagram ? (
-                  <p className="text-muted-foreground">
-                    {formatLongVideoThresholdMinutes()} 分以上の動画です。VidNote
-                    内の図解はタイムアウトしやすいため、
-                    <span className="font-medium text-foreground">
-                      「Cursor 用にコピー」→ デスクトップの VidNote Diagram
-                    </span>
-                    を推奨します。
-                  </p>
-                ) : (
-                  <p className="text-muted-foreground">
-                    要点が出たら「Cursor 用にコピー」で図解を作成するか、短尺向けに
-                    VidNote 内で生成できます（上部の「AI 図解」メニュー）。
-                  </p>
-                )}
-                <ol className="flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
-                  <li>「Cursor 用にコピー」を押す</li>
-                  <li>デスクトップの「VidNote Diagram」→ Composer に貼り付け</li>
-                  <li>output/diagram.html に保存 → npm run diagram:preview で確認</li>
-                  <li>「AI 図解」→「HTML を取り込む」から diagram.html を選ぶ</li>
-                </ol>
-              </div>
             )}
 
             {isGeneratingDiagram && (
@@ -437,23 +379,9 @@ export function SummaryNotesPane({
               </p>
             )}
 
-            {hasVisualExplainer && !isGeneratingDiagram && (
-              <p className="text-sm text-muted-foreground">
-                図解は「AI 図解」→「新しいタブで開く」から表示できます（
-                {resolvedTheme === "dark" ? "ダーク" : "ライト"}
-                モード）。
-              </p>
-            )}
-
             {session?.errorMessage && !isProcessing && summary && (
-              <div className="flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
-                <p className="text-destructive">{session.errorMessage}</p>
-                {!hasVisualExplainer && (
-                  <p className="text-muted-foreground">
-                    「Cursor 用にコピー」で Cursor または NotebookLM
-                    に貼り付けて図解化できます。
-                  </p>
-                )}
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                {session.errorMessage}
               </div>
             )}
 
@@ -465,79 +393,31 @@ export function SummaryNotesPane({
                   要約がありません。「再生成」を実行してください。
                 </p>
               )}
-          </div>
-        </ScrollArea>
-      </div>
+          </section>
 
-      {!isMobile && (
-      <div
-        className="flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-border bg-muted/50"
-        onMouseDown={() => {
-          dragging.current = true;
-        }}
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="要点とノートの境界"
-      >
-        <span className="text-[10px] text-muted-foreground">↕</span>
-      </div>
-      )}
+          <section className="flex flex-col gap-3 border-t border-border pt-6">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              マイノート
+            </h3>
 
-      <div
-        className={cn(
-          "flex min-h-0 flex-col",
-          isMobile && mobileSection !== "notes" && "max-md:hidden",
-          isMobile ? "max-md:flex-1" : undefined,
-        )}
-        style={isMobile ? undefined : { flex: `${1 - splitRatio} 1 0%` }}
-      >
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3 max-md:hidden md:flex">
-          <h2 className="text-sm font-medium">マイノート</h2>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={!canGenerateCritical}
-            onClick={() => void handleGenerateCriticalThinking()}
-          >
-            <ScanSearch />
-            {isGeneratingCritical ? "分析中…" : "批判的視点"}
-          </Button>
-          {notesCopyFeedback && (
-            <span className="text-xs text-muted-foreground">{notesCopyFeedback}</span>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="ml-auto"
-            disabled={!session?.notesHtml?.trim() || !bodiesReady}
-            onClick={() => void handleCopyNotes()}
-            aria-label="マイノートを全文コピー"
-          >
-            <ClipboardCopy />
-          </Button>
-        </div>
-        <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden p-3", isMobile && "max-md:p-4")}>
-          {!session ? (
-            <p className={cn("text-sm text-muted-foreground", mobileUi.paneBodyMuted)}>
-              {isMobile
-                ? "下部の「履歴」からセッションを選択してください。"
-                : "左の一覧からセッションを選択してください。"}
-            </p>
-          ) : !bodiesReady ? (
-            <Skeleton className="h-[200px] w-full" />
-          ) : (
-            <div className="min-h-0 flex-1">
+            {!session ? (
+              <p className={cn("text-sm text-muted-foreground", mobileUi.paneBodyMuted)}>
+                {isMobile
+                  ? "下部の「履歴」からセッションを選択してください。"
+                  : "左の一覧からセッションを選択してください。"}
+              </p>
+            ) : !bodiesReady ? (
+              <Skeleton className="h-[200px] w-full" />
+            ) : (
               <NoteEditor
                 key={`${session.id}-${notesEditorKey}`}
                 initialContent={session.notesHtml ?? ""}
                 onChange={onNotesChange}
               />
-            </div>
-          )}
+            )}
+          </section>
         </div>
-      </div>
+      </ScrollArea>
     </div>
   );
 }

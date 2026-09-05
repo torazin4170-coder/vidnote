@@ -511,35 +511,49 @@ export function SessionLibraryPane({
                           session.youtubeId != null
                             ? youtubeThumbnailUrl(session.youtubeId)
                             : session.thumbnailUrl;
+                        const title = session.title ?? "無題の動画";
+                        const tooltip = session.categoryName
+                          ? `${session.categoryName} — ${title}`
+                          : title;
                         return (
                           <SidebarMenuItem key={session.id}>
                             <SidebarMenuButton
                               isActive={session.id === selectedSessionId}
                               onClick={() => selectSession(session.id)}
-                              tooltip={session.title ?? "無題"}
+                              tooltip={tooltip}
+                              className={cn(
+                                session.categoryName && "h-auto min-h-12 items-start py-2",
+                              )}
                             >
                               {thumbnailSrc ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
                                   src={thumbnailSrc}
                                   alt=""
-                                  className="size-4 shrink-0 rounded-sm object-cover"
+                                  className={cn(
+                                    "size-4 shrink-0 rounded-sm object-cover",
+                                    session.categoryName && "mt-0.5",
+                                  )}
                                 />
                               ) : (
-                                <span className="size-4 shrink-0 rounded-sm bg-muted" />
+                                <span
+                                  className={cn(
+                                    "size-4 shrink-0 rounded-sm bg-muted",
+                                    session.categoryName && "mt-0.5",
+                                  )}
+                                />
                               )}
-                              <span className="truncate">
-                                {session.title ?? "無題の動画"}
-                              </span>
-                              <span className="ml-auto flex items-center gap-1 group-data-[collapsible=icon]:hidden">
-                                {session.categoryName && (
-                                  <Badge
-                                    variant="outline"
-                                    className="max-w-16 truncate text-[10px]"
-                                  >
+                              <span className="min-w-0 flex-1 overflow-hidden">
+                                {session.categoryName ? (
+                                  <span className="mb-0.5 block truncate text-[10px] font-medium leading-tight text-primary">
                                     {session.categoryName}
-                                  </Badge>
-                                )}
+                                  </span>
+                                ) : null}
+                                <span className="block truncate leading-snug">
+                                  {title}
+                                </span>
+                              </span>
+                              <span className="ml-auto flex shrink-0 items-center gap-1 self-start pt-0.5 group-data-[collapsible=icon]:hidden">
                                 {icons.processing && (
                                   <Badge
                                     variant="secondary"

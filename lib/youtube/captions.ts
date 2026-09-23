@@ -323,6 +323,25 @@ async function downloadSubtitleWithYtdlp(
 async function fetchViaYoutubeTranscript(
   videoId: string,
 ): Promise<TranscriptSegment[]> {
+  try {
+    const { fetchVerifiedTranscriptItems } = await import(
+      "./fetch-verified-transcript.mjs"
+    );
+    const items = await fetchVerifiedTranscriptItems(videoId);
+    if (items.length > 0) {
+      return items.map((item) => ({
+        startSec: item.offset / 1000,
+        text: item.text.trim(),
+      }));
+    }
+  } catch (err) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String(err.code)
+        : "";
+    if (code === "WRONG_VIDEO") throw err;
+  }
+
   const langs = ["ja", "ja-JP", "en", "en-US"];
   let lastError: Error | null = null;
 

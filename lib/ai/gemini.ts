@@ -82,22 +82,15 @@ frameworkViews は図解生成の**参考メモ**（UI非表示）。**無理に
 - 同じ事実を複数セクションに載せる場合は、**視点・粒度・表現を変える**（例: overview=結論、keyPoints=根拠、actions=実践）
 - 意味や事実を歪めない範囲で表現を変える。無理に言い換えるより、**載せる情報を分ける**ことを優先する
 
-必ず次の JSON 形式のみを返してください。Markdown や説明文は不要です。
+必ず次のキーだけを持つ JSON を返してください。Markdown や説明文は不要です。
+値はすべて文字起こしの内容から書くこと。形式の説明や空のひな形を内容として返さないこと。
 
-{
-  "overview": "段落1\\n\\n段落2。番号付きなら\\n\\n1. 要点\\n\\n2. 要点",
-  "keyPoints": ["重要ポイント1", "重要ポイント2"],
-  "terms": [{ "term": "用語", "definition": "説明" }],
-  "actions": ["学習者が取るべきアクション1"],
-  "frameworkViews": [
-    {
-      "framework": "5W1H",
-      "approach": "decompose",
-      "title": "状況整理",
-      "items": ["Who: ...", "What: ..."]
-    }
-  ]
-}
+- overview: 文字列。段落の区切りは文字列の中の改行2つ（\\n\\n）
+- keyPoints: 文字列の配列
+- terms: term と definition を持つオブジェクトの配列。該当がなければ []
+- actions: 文字列の配列。該当がなければ []
+- frameworkViews: framework, approach, title, items を持つオブジェクトの配列。不要なら []
+- approach は decompose | structure | essence | perspective のいずれか
 
 文字起こし:
 `;
@@ -625,6 +618,10 @@ export function friendlyGeminiError(err: unknown): string {
     return "AI の要約結果（JSON）の形式が不正でした。「要約を再生成」をもう一度試してください。";
   }
 
+  if (message.includes("PROMPT_ECHO_SUMMARY")) {
+    return "AI が動画と無関係なひな形の要約を返したため、保存しませんでした。「要約を再生成」をもう一度押してください。";
+  }
+
   return message.replace(/^\[GoogleGenerativeAI Error\]:\s*/, "");
 }
 
@@ -756,6 +753,45 @@ function repairLooseJson(raw: string): string {
   return raw.trim().replace(/,\s*([}\]])/g, "$1");
 }
 
+const PROMPT_ECHO_MARKERS = [
+  "重要ポイント1",
+  "重要ポイント2",
+  "学習者が取るべきアクション1",
+  "段落1",
+  "Who: ...",
+  "What: ...",
+];
+
+/** プロンプト内の記入例を、そのまま要約として返したか */
+export function isPromptEchoSummary(summary: SummarySections): boolean {
+  const blob = [
+    summary.overview,
+    ...summary.keyPoints,
+    ...summary.actions,
+    ...summary.terms.flatMap((term) => [term.term, term.definition]),
+    ...(summary.frameworkViews ?? []).flatMap((view) => [
+      view.framework,
+      view.title,
+      ...view.items,
+    ]),
+  ].join("\n");
+
+  const hits = PROMPT_ECHO_MARKERS.filter((marker) => blob.includes(marker));
+  if (hits.length >= 2) return true;
+
+  const term = summary.terms[0];
+  return (
+    summary.keyPoints.includes("重要ポイント1") ||
+    summary.actions.includes("学習者が取るべきアクション1") ||
+    (term?.term === "用語" && term.definition === "説明")
+  );
+}
+
+function isPromptEchoError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes("PROMPT_ECHO_SUMMARY");
+}
+
 function parseSummaryResponse(text: string): SummarySections {
   const raw = extractJson(text);
   let parsed: unknown;
@@ -802,10 +838,16 @@ async function generateSummaryWithModel(
         json: true,
         usage: { sessionId: usage?.sessionId, operation: "summary" },
       });
-      return parseSummaryResponse(text);
+      const parsed = parseSummaryResponse(text);
+      if (isPromptEchoSummary(parsed)) {
+        throw new Error("PROMPT_ECHO_SUMMARY");
+      }
+      return parsed;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (!isSummaryJsonParseError(err) || attempt >= 2) {
+      const retryable =
+        isSummaryJsonParseError(err) || isPromptEchoError(err);
+      if (!retryable || attempt >= 2) {
         throw lastError;
       }
       console.warn(
@@ -823,9 +865,20 @@ async function polishChunkWithModel(
   transcript: string,
   usage?: Pick<GeminiCallContext, "sessionId">,
 ): Promise<string> {
-  return generateWithModelRetry(modelName, POLISH_PROMPT + transcript, {
-    usage: { sessionId: usage?.sessionId, operation: "polish" },
-  });
+  const text = await generateWithModelRetry(
+    modelName,
+    POLISH_PROMPT + transcript,
+    {
+      usage: { sessionId: usage?.sessionId, operation: "polish" },
+    },
+  );
+  if (
+    text.includes("あなたは字幕テキストの校正アシスタント") ||
+    text.includes("出力は校正後のプレーンテキストのみ")
+  ) {
+    throw new Error("校正結果が指示文の写しだったため破棄しました");
+  }
+  return text;
 }
 
 async function summarizeChunk(
@@ -943,6 +996,12 @@ export async function summarizeTranscript(
   transcript: string,
   context?: Pick<GeminiCallContext, "sessionId">,
 ): Promise<SummarySections> {
+  if (transcript.trim().length < 40) {
+    throw new Error(
+      "文字起こしが短すぎるため要約できません。字幕を再取得してから再度お試しください。",
+    );
+  }
+
   const chunks = splitTranscriptChunks(transcript);
   if (chunks.length === 1) {
     return summarizeChunk(transcript, context);

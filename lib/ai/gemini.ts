@@ -76,7 +76,7 @@ frameworkViews は図解生成の**参考メモ**（UI非表示）。**無理に
 - keyPoints / actions の各要素も、説明が複数行になる場合は \\n または \\n\\n で改行する
 
 ## セクション間の役割分担（重複を避ける）
-- overview: カスタム指示がなければ2〜4文。指示があればその長さ・段落構成に従う（箇条書きの言い回しをそのまま繰り返さない）
+- overview: 長さは直後の分量ガイドに従う。カスタム指示があれば長さ・段落はそちらを優先（箇条書きの言い回しをそのまま繰り返さない）
 - keyPoints: 具体的な論点・事実・手順・根拠を箇条書き（overview の要約文を言い換えただけにしない）
 - actions: 学習者が**次に取るべき行動・実践ステップ**のみ（keyPoints の再掲や同義語の言い換えにしない）
 - 同じ事実を複数セクションに載せる場合は、**視点・粒度・表現を変える**（例: overview=結論、keyPoints=根拠、actions=実践）
@@ -686,7 +686,12 @@ async function generateWithModelRetry(
   const model = genAI.getGenerativeModel({
     model: modelName,
     ...(options?.json
-      ? { generationConfig: { responseMimeType: "application/json" } }
+      ? {
+          generationConfig: {
+            responseMimeType: "application/json",
+            maxOutputTokens: 16384,
+          },
+        }
       : {}),
   });
 
@@ -807,25 +812,92 @@ function parseSummaryResponse(text: string): SummarySections {
   return summarySectionSchema.parse(parsed);
 }
 
-function buildSummaryPrompt(customPrompt?: string | null): string {
+/** 文字起こし約400字を1分とみなしたときの分量。上限で論点を切らない。 */
+export function summaryVolumeGuide(
+  chunkChars: number,
+  totalChars = chunkChars,
+): string {
+  const chars = Math.max(chunkChars, 0);
+  const total = Math.max(totalChars, chars);
+  const tier =
+    chars < 3_000
+      ? {
+          label: "短い（おおよそ10分未満）",
+          overview: "2〜4文、1段落",
+          keyPoints: "3〜6個",
+          actions: "1〜3個",
+        }
+      : chars < 8_000
+        ? {
+            label: "中くらい（おおよそ10〜20分）",
+            overview: "2段落",
+            keyPoints: "少なくとも6個。論点が多ければ増やす",
+            actions: "2〜4個",
+          }
+        : chars < 20_000
+          ? {
+              label: "長め（おおよそ20〜50分）",
+              overview: "3〜4段落。章や話題の切れ目で分ける",
+              keyPoints: "少なくとも10個。独立した論点は落とさない",
+              actions: "3〜6個",
+            }
+          : chars < 45_000
+            ? {
+                label: "長編（おおよそ50〜110分）",
+                overview: "章ごとに段落（目安5〜7段落）",
+                keyPoints: "少なくとも16個。手順・数値・固有名詞を残す",
+                actions: "4〜8個",
+              }
+            : {
+                label: "超長編（おおよそ2時間以上、またはそれに相当する文字量）",
+                overview: "章ごとに段落。この範囲の流れが分かる長さ",
+                keyPoints: "少なくとも22個。重要な具体例まで残す",
+                actions: "5〜10個",
+              };
+
+  const partial =
+    total > chars + 500
+      ? `\nこれは長い動画（全体約${total.toLocaleString("ja-JP")}字）の一部です。この範囲の重要点を、短い動画向けの要約まで圧縮しないこと。`
+      : "";
+
+  return `この文字起こしは約${chars.toLocaleString("ja-JP")}字（${tier.label}）。要約の量もこれに比例させる。
+- overview: ${tier.overview}
+- keyPoints: ${tier.keyPoints}
+- actions: ${tier.actions}
+- terms: 説明された重要用語は、短い動画では少なく、長い動画では出てきた分を載せる
+- 分量の上限を理由に、数値・手順・固有名詞・章の結論を捨てない。長いほど要約も長くてよい${partial}`;
+}
+
+function buildSummaryPrompt(
+  customPrompt: string | null | undefined,
+  transcriptChars: number,
+  totalChars = transcriptChars,
+): string {
+  const volume = `## 分量（文字起こしの長さに比例。カスタム指示が長さを指定している場合はそちらを優先）
+${summaryVolumeGuide(transcriptChars, totalChars)}
+
+`;
+  let prompt = SUMMARY_PROMPT.replace("文字起こし:\n", `${volume}文字起こし:\n`);
   const trimmed = customPrompt?.trim();
-  if (!trimmed) return SUMMARY_PROMPT;
+  if (!trimmed) return prompt;
   const block = `## ユーザー追加指示（文体・長さ・段落・省略はこちらを最優先。JSON のキー構成は変えない）
 ${trimmed}
 
 段落・箇条書きの空行は、画面の余白になるよう JSON 文字列の中に \\n\\n として入れること（見た目の空白文字だけでは反映されない）。
 
 `;
-  return SUMMARY_PROMPT.replace("文字起こし:\n", `${block}文字起こし:\n`);
+  return prompt.replace("文字起こし:\n", `${block}文字起こし:\n`);
 }
 
 async function generateSummaryWithModel(
   modelName: string,
   transcript: string,
   usage?: Pick<GeminiCallContext, "sessionId">,
+  totalChars = transcript.length,
 ): Promise<SummarySections> {
   const customPrompt = await getSummaryCustomPrompt();
-  const basePrompt = buildSummaryPrompt(customPrompt) + transcript;
+  const basePrompt =
+    buildSummaryPrompt(customPrompt, transcript.length, totalChars) + transcript;
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -884,13 +956,19 @@ async function polishChunkWithModel(
 async function summarizeChunk(
   transcript: string,
   usage?: Pick<GeminiCallContext, "sessionId">,
+  totalChars = transcript.length,
 ): Promise<SummarySections> {
   const models = getModelCandidates();
   let lastError: Error | null = null;
 
   for (const modelName of models) {
     try {
-      return await generateSummaryWithModel(modelName, transcript, usage);
+      return await generateSummaryWithModel(
+        modelName,
+        transcript,
+        usage,
+        totalChars,
+      );
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (shouldTryNextModel(err)) {
@@ -1003,12 +1081,13 @@ export async function summarizeTranscript(
   }
 
   const chunks = splitTranscriptChunks(transcript);
+  const totalChars = transcript.length;
   if (chunks.length === 1) {
-    return summarizeChunk(transcript, context);
+    return summarizeChunk(transcript, context, totalChars);
   }
 
   const partials = await mapSequential(chunks, (chunk) =>
-    summarizeChunk(chunk, context),
+    summarizeChunk(chunk, context, totalChars),
   );
   return mergeSummaries(partials);
 }

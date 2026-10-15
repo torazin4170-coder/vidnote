@@ -247,84 +247,102 @@ npm run relay
 
   Write-Host "[2/2] Starting Cloudflare Tunnel..."
   Write-Host "  (protocol=http2, edge-ip-version=4 — QUIC/IPv6 failures are common on some networks)"
-  Stop-StaleCloudflared
-  Remove-Item $LogPath -Force -ErrorAction SilentlyContinue
-
-  # Default QUIC over IPv6 often fails with "control stream encountered a failure".
-  # Force HTTP/2 + IPv4 for reliable quick tunnels on Windows home networks.
-  $tunnelProc = Start-Process -FilePath $Cloudflared -ArgumentList @(
-    "tunnel",
-    "--url", "http://127.0.0.1:8787",
-    "--protocol", "http2",
-    "--edge-ip-version", "4",
-    "--no-autoupdate"
-  ) -RedirectStandardError $LogPath -PassThru -WindowStyle Hidden
-
-  if (-not $tunnelProc) {
-    throw "Failed to start cloudflared"
-  }
-
-  $tunnelUrl = Wait-ForTunnelUrl -LogPath $LogPath
-
-  Write-Host ""
-  if (-not $tunnelUrl) {
-    Write-Host "Could not read tunnel URL. Log file:" -ForegroundColor Red
-    Write-Host "  $LogPath"
-    if (Test-Path $LogPath) {
-      Write-Host ""
-      Write-Host "--- log tail ---"
-      Get-Content $LogPath -Tail 20
-    }
-    Pause-BeforeExit 1
-  }
-
-  Write-Host "Tunnel URL:" -ForegroundColor Green
-  Write-Host "  $tunnelUrl"
-  Write-Host ""
-  Write-Host "  Verifying tunnel reaches local relay..."
-  if (-not (Wait-ForTunnelRelay -TunnelUrl $tunnelUrl)) {
-    Write-Host "  Tunnel URL was found but /health did not respond." -ForegroundColor Red
-    Write-Host "  Check cloudflared log:" -ForegroundColor Yellow
-    Write-Host "    $LogPath"
-    if (Test-Path $LogPath) {
-      Write-Host ""
-      Write-Host "--- log tail ---"
-      Get-Content $LogPath -Tail 20
-    }
-    Pause-BeforeExit 1
-  }
-
-  Write-Host "  Tunnel OK." -ForegroundColor Green
-  Save-TunnelUrlFile -Url $tunnelUrl
-
-  if (-not (Ensure-RelayUrlRegistered -Url $tunnelUrl)) {
-    throw @"
-VidNote への URL 登録に失敗しました。
-VidNote は古いトンネル URL を参照し続けるため字幕取得が失敗します。
-ネットワークを確認してからこのウィンドウを閉じ、VidNote Relay を再起動してください。
-トンネル URL: $tunnelUrl
-"@
-  }
-
+  Write-Host "  If the tunnel drops, this window restarts it and re-registers the URL."
   Write-Host ""
   Write-Host "Keep THIS window open (minimize OK) while using VidNote." -ForegroundColor Yellow
   Write-Host "Relay URL is registered automatically — Vercel redeploy is NOT required." -ForegroundColor Yellow
   Write-Host "For a permanent fixed URL, run scripts/setup-named-tunnel.ps1 once." -ForegroundColor Yellow
-  Write-Host ""
   Write-Host "Press Ctrl+C or close this window to stop."
   Write-Host ""
 
-  $lastRegister = Get-Date
-  $registerIntervalSec = 120
-  while (-not $tunnelProc.HasExited) {
-    Start-Sleep -Seconds 10
-    if (((Get-Date) - $lastRegister).TotalSeconds -ge $registerIntervalSec) {
-      if (Register-RelayUrlToVidNote -Url $tunnelUrl) {
-        $lastRegister = Get-Date
-      } else {
-        Write-Host "  Re-register failed (will retry in ${registerIntervalSec}s)..." -ForegroundColor Yellow
+  while ($true) {
+    Stop-StaleCloudflared
+    Remove-Item $LogPath -Force -ErrorAction SilentlyContinue
+
+    # Default QUIC over IPv6 often fails with "control stream encountered a failure".
+    # Force HTTP/2 + IPv4 for reliable quick tunnels on Windows home networks.
+    $tunnelProc = Start-Process -FilePath $Cloudflared -ArgumentList @(
+      "tunnel",
+      "--url", "http://127.0.0.1:8787",
+      "--protocol", "http2",
+      "--edge-ip-version", "4",
+      "--no-autoupdate"
+    ) -RedirectStandardError $LogPath -PassThru -WindowStyle Hidden
+
+    if (-not $tunnelProc) {
+      throw "Failed to start cloudflared"
+    }
+
+    $tunnelUrl = Wait-ForTunnelUrl -LogPath $LogPath
+    if (-not $tunnelUrl) {
+      Write-Host "Could not read tunnel URL. Retrying in 5s..." -ForegroundColor Red
+      if (Test-Path $LogPath) { Get-Content $LogPath -Tail 15 }
+      Stop-Process -Id $tunnelProc.Id -Force -ErrorAction SilentlyContinue
+      Start-Sleep -Seconds 5
+      continue
+    }
+
+    Write-Host "Tunnel URL:" -ForegroundColor Green
+    Write-Host "  $tunnelUrl"
+    Write-Host "  Verifying tunnel reaches local relay..."
+    if (-not (Wait-ForTunnelRelay -TunnelUrl $tunnelUrl)) {
+      Write-Host "  Tunnel /health failed. Restarting tunnel..." -ForegroundColor Red
+      if (Test-Path $LogPath) { Get-Content $LogPath -Tail 15 }
+      Stop-Process -Id $tunnelProc.Id -Force -ErrorAction SilentlyContinue
+      Start-Sleep -Seconds 5
+      continue
+    }
+
+    Write-Host "  Tunnel OK." -ForegroundColor Green
+    Save-TunnelUrlFile -Url $tunnelUrl
+
+    if (-not (Ensure-RelayUrlRegistered -Url $tunnelUrl)) {
+      Write-Host "  URL registration failed. Restarting tunnel..." -ForegroundColor Red
+      Stop-Process -Id $tunnelProc.Id -Force -ErrorAction SilentlyContinue
+      Start-Sleep -Seconds 5
+      continue
+    }
+
+    $lastRegister = Get-Date
+    $lastHealth = Get-Date
+    $healthFailures = 0
+    $registerIntervalSec = 120
+    $healthIntervalSec = 45
+
+    while (-not $tunnelProc.HasExited) {
+      Start-Sleep -Seconds 10
+      $now = Get-Date
+
+      if (($now - $lastHealth).TotalSeconds -ge $healthIntervalSec) {
+        $lastHealth = $now
+        $prevErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        & node (Join-Path $ProjectRoot "scripts\check-relay-tunnel.mjs") $tunnelUrl 2>&1 | Out-Null
+        $healthOk = $LASTEXITCODE -eq 0
+        $ErrorActionPreference = $prevErrorAction
+        if ($healthOk) {
+          $healthFailures = 0
+        } else {
+          $healthFailures++
+          Write-Host "  Tunnel health check failed ($healthFailures/2)." -ForegroundColor Yellow
+          if ($healthFailures -ge 2) { break }
+        }
+      }
+
+      if (($now - $lastRegister).TotalSeconds -ge $registerIntervalSec) {
+        if (Register-RelayUrlToVidNote -Url $tunnelUrl) {
+          $lastRegister = $now
+        } else {
+          Write-Host "  Re-register failed (will retry)." -ForegroundColor Yellow
+        }
       }
     }
+
+    Write-Host "  Tunnel dropped. Starting a new one..." -ForegroundColor Yellow
+    if ($tunnelProc -and -not $tunnelProc.HasExited) {
+      Stop-Process -Id $tunnelProc.Id -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 3
   }
 } catch {
   Write-Host ""

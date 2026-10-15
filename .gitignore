@@ -46,5 +46,6 @@ diagram-workspace/input/prompt.md
 .vercel
 .vercel-deploy-password.txt
 .relay-tunnel-url
+.relay-cloudflared.log
 cloudflared/config.yml
 diagram-workspace/output/diagram.preview.html
